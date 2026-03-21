@@ -82,7 +82,7 @@ const RegisterFarmer = () => {
     }
 
     try {
-      const res = await fetch("http://192.168.8.7:5000/register", {
+      const res = await fetch("http://192.168.8.8:5000/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

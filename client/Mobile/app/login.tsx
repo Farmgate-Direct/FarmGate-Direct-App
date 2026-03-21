@@ -7,31 +7,59 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const API_URL = "http://192.168.8.12:5000";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    const res = await fetch("http://192.168.8.7:5000/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      Alert.alert(data.message);
+    if (!email || !password) {
+      Alert.alert("Please enter email and password");
       return;
     }
 
-    // 🔥 ROLE BASED REDIRECT
-    if (data.role === "Farmer") {
-      router.replace("/farmer/(tabs)/home");
-    } else if (data.role === "Buyer") {
-      router.replace("/buyer/(tabs)/home");
+    try {
+      setLoading(true);
+
+      const res = await fetch(`${API_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        Alert.alert(data.message || "Login failed");
+        setLoading(false);
+        return;
+      }
+
+      console.log("LOGIN SUCCESS:", data);
+
+      // ✅ Save EXACT user object
+      await AsyncStorage.setItem("user", JSON.stringify(data));
+
+      // ✅ Role based redirect
+      if (data.role === "farmer") {
+        router.replace("/farmer/(tabs)/home");
+      } else if (data.role === "buyer") {
+        router.replace("/buyer/(tabs)/home");
+      } else {
+        Alert.alert("Unknown role");
+      }
+
+    } catch (error) {
+      console.log("LOGIN ERROR:", error);
+      Alert.alert("Server error");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -40,7 +68,6 @@ const Login = () => {
       {/* Header */}
       <View className="flex-1 items-center justify-center mb-10">
         <Image
-          //source={require("../assets/images/farmgate-logo.png")}
           className="w-16 h-16 mb-3"
           resizeMode="contain"
         />
@@ -57,11 +84,11 @@ const Login = () => {
 
       {/* White Card */}
       <View className="bg-white rounded-t-[40px] px-6 pt-10 pb-10">
-        {/* Username */}
+        {/* Email */}
         <Text className="text-[20px] text-green-700 mb-5">Email</Text>
         <TextInput
           className="border border-green-700 rounded-lg px-4 py-5 mb-4"
-          placeholder="Enter username"
+          placeholder="Enter email"
           value={email}
           onChangeText={setEmail}
         />
@@ -79,12 +106,17 @@ const Login = () => {
         {/* Login Button */}
         <View className="items-center justify-center">
           <TouchableOpacity
-            className="bg-green-700 py-3 rounded-xl w-40"
+            className="bg-green-700 py-3 rounded-xl w-40 items-center"
             onPress={handleLogin}
+            disabled={loading}
           >
-            <Text className="text-white text-center font-bold text-lg">
-              Login
-            </Text>
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text className="text-white font-bold text-lg">
+                Login
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
 

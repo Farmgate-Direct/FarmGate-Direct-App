@@ -1,127 +1,50 @@
 import { useRouter } from "expo-router";
-import { useState } from "react";
-import { FlatList, Image, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  FlatList,
+  Image,
+  Text,
+  TouchableOpacity,
+  View,
+  ActivityIndicator,
+} from "react-native";
 
 import Categories from "@/components/Categories";
-import QuantityModal from "@/components/QuantityModal";
-import SearchBar from "@/components/SearchBar";
-
 import { images } from "@/constants/image";
-import { useCart } from "@/context/CartContext";
 import { Ionicons } from "@expo/vector-icons";
+import { Product } from "@/interfaces/product"; // import interface
 
-/* ---------- PRODUCTS ---------- */
-const products = [
-  {
-    id: "1",
-    name: "Fresh Farm Tomatoes",
-    farm: "Green Valley Farm",
-    category: "Vegetables",
-    image: require("@/assets/images/tomato.jpg"),
-    price: "₱120 / kg",
-    stock: "45 kg Available",
-    rate: "5",
-  },
-  {
-    id: "2",
-    name: "Fresh Eggplant",
-    farm: "Green Valley Farm",
-    category: "Vegetables",
-    image: require("@/assets/images/eggplant.jpg"),
-    price: "₱80 / kg",
-    stock: "32 kg Available",
-    rate: "5",
-  },
-  {
-    id: "3",
-    name: "Fresh Mango",
-    farm: "Golden Orchard Farm",
-    category: "Fruits",
-    image: require("@/assets/images/mango.jpg"),
-    price: "₱60 / kg",
-    stock: "50 kg Available",
-    rate: "5",
-  },
-  {
-    id: "4",
-    name: "Native Green Grapes",
-    farm: "Golden Orchard Farm",
-    category: "Fruits",
-    image: require("@/assets/images/greengrape.jpg"),
-    price: "₱200 / kg",
-    stock: "22 kg Available",
-    rate: "5",
-  },
-  {
-    id: "5",
-    name: "Fresh Rice",
-    farm: "Bulacan Organic Farm",
-    category: "Rice",
-    image: require("@/assets/images/rice.jpg"),
-    price: "₱60 / kg",
-    stock: "50 kg Available",
-    rate: "5",
-  },
-  {
-    id: "6",
-    name: "Native Egg",
-    farm: "Golden Poultry Farm",
-    category: "Eggs & Poultry",
-    image: require("@/assets/images/egg.jpg"),
-    price: "₱200 / kg",
-    stock: "22 kg Available",
-    rate: "5",
-  },
-  {
-    id: "7",
-    name: "Fresh Pumpkin",
-    farm: "Green Valley Farm",
-    category: "Vegetables",
-    image: require("@/assets/images/pumpkin.jpg"),
-    price: "₱60 / kg",
-    stock: "50 kg Available",
-    rate: "5",
-  },
-  {
-    id: "8",
-    name: "Fresh Banana",
-    farm: "Golden Orchard Farm",
-    category: "Fruits",
-    image: require("@/assets/images/banana.jpg"),
-    price: "₱200 / kg",
-    stock: "22 kg Available",
-    rate: "5",
-  },
-  {
-    id: "9",
-    name: "Fresh Orange",
-    farm: "Golden Orchard Farm",
-    category: "Fruits",
-    image: require("@/assets/images/orange.jpg"),
-    price: "₱60 / kg",
-    stock: "50 kg Available",
-    rate: "5",
-  },
-  {
-    id: "10",
-    name: "Native Okra",
-    farm: "Green Valley Farm",
-    category: "Vegetables",
-    image: require("@/assets/images/okra.jpg"),
-    price: "₱200 / kg",
-    stock: "22 kg Available",
-    rate: "5",
-  },
-];
-
-type Product = (typeof products)[0];
+const API_URL = "http://192.168.8.23:5000";
 
 export default function Home() {
   const router = useRouter();
-  const { addToCart } = useCart();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [showQtyModal, setShowQtyModal] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  // Fetch products
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    try {
+      const res = await fetch(`${API_URL}/products`);
+      const data = await res.json();
+      setProducts(data);
+      setLoading(false);
+    } catch (error) {
+      console.log("FETCH ERROR:", error);
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View className="flex-1 justify-center items-center bg-white">
+        <ActivityIndicator size="large" color="#16a34a" />
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-gray-100">
@@ -166,25 +89,15 @@ export default function Home() {
             <View className="mx-6 mt-6 bg-green-600 rounded-2xl p-4 flex-row items-center">
               <View style={{ flex: 1 }}>
                 <Text className="text-white font-bold text-xl mb-1">
-                  This Week’s Fresh Picks
+                  Fresh from Local Farmers
                 </Text>
+
                 <Text className="text-green-100 text-md mb-3">
-                  100% organic & freshly picked
+                  100% organic & freshly harvested
                 </Text>
-
-                <TouchableOpacity className="bg-white mt-3 px-4 py-2 rounded-full self-start">
-                  <Text className="text-green-700 font-bold">Shop Now</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View className="w-24 h-24 relative">
-                <Image
-                  source={require("@/assets/images/egg.jpg")}
-                  className="absolute bottom-0 right-0 w-24 h-24"
-                  resizeMode="contain"
-                />
               </View>
             </View>
+
             <Categories />
           </>
         }
@@ -193,16 +106,8 @@ export default function Home() {
             activeOpacity={0.9}
             onPress={() =>
               router.push({
-                pathname: "/products/[id]",
-                params: {
-                  id: item.id,
-                  name: item.name,
-                  price: item.price,
-                  stock: item.stock,
-                  rate: item.rate,
-                  farm: item.farm,
-                  category: item.category,
-                },
+                pathname: "/buyer/products/[id]",
+                params: { id: item.id }, // only pass id
               })
             }
             style={{
@@ -214,84 +119,61 @@ export default function Home() {
             }}
           >
             <View style={{ padding: 10 }}>
-              <Image
-                source={item.image}
-                style={{ width: "100%", height: 120, borderRadius: 10 }}
-                resizeMode="cover"
-              />
+              {item.image ? (
+                <Image
+                  source={{ uri: item.image }}
+                  style={{ width: "100%", height: 120, borderRadius: 10 }}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View
+                  style={{
+                    width: "100%",
+                    height: 120,
+                    backgroundColor: "#eee",
+                    borderRadius: 10,
+                  }}
+                />
+              )}
 
-              {/* BADGES + NAME */}
-              <View className="flex-row items-center justify-between mt-2">
-                <View className="flex-row">
-                  <View className="bg-green-700 py-0.5 px-2 rounded-2xl mr-1">
-                    <Text className="text-white font-semibold text-xs">
-                      Fresh
-                    </Text>
-                  </View>
+              {/* Name & Freshness */}
+              <View className="flex-row items-center mt-2">
+                {item.createdAt &&
+                  item.freshness &&
+                  (() => {
+                    const days = parseInt(item.freshness); // "5 days" -> 5
+                    const expireTime = days * 86400000; // convert days to milliseconds
+                    const isFresh = Date.now() - item.createdAt < expireTime;
 
-                  <View className="bg-gray-200 py-0.5 px-2 rounded-2xl">
-                    <Text className="text-gray-700 font-semibold text-xs">
-                      {item.category}
-                    </Text>
-                  </View>
-                </View>
+                    return isFresh ? (
+                      <View className="bg-green-500 px-2 py-1 rounded-md mr-2">
+                        <Text className="text-white text-xs font-bold">
+                          Fresh
+                        </Text>
+                      </View>
+                    ) : null;
+                  })()}
+
+                <Text
+                  className="font-semibold text-gray-800 text-sm flex-1"
+                  numberOfLines={1}
+                >
+                  {item.name}
+                </Text>
               </View>
 
-              <Text
-                className="font-semibold text-gray-800 text-sm mt-2"
-                numberOfLines={1}
-              >
-                {item.name}
-              </Text>
-
+              {/* Farm info & price */}
               <Text className="text-xs text-gray-500 mt-1">
-                {item.farm}, Bulacan
+                {item.farmName}
               </Text>
-
               <Text className="font-bold text-green-700 mt-1">
-                {item.price}
+                ₱{item.price}.00
               </Text>
-
-              <Text className="text-xs text-gray-500 mt-1">
-                {item.stock} • ⭐ {item.rate}
-              </Text>
-            {/*
-              <TouchableOpacity
-                onPress={() => {
-                  setSelectedProduct(item);
-                  setShowQtyModal(true);
-                }}
-                className="bg-green-700 mt-3 py-2 rounded-xl"
-              >
-                <Text className="text-white font-bold text-center">
-                  Buy now
-                </Text>
-              </TouchableOpacity>*/}
+              <Text className="text-xs text-gray-500 mt-1">{item.stock}</Text>
+              <Text className="text-xs text-gray-500 mt-1">{item.status}</Text>
             </View>
           </TouchableOpacity>
         )}
-      />
-
-      <QuantityModal
-        visible={showQtyModal}
-        onClose={() => {
-          setShowQtyModal(false);
-          setSelectedProduct(null);
-        }}
-        onConfirm={(qty) => {
-          if (!selectedProduct) return;
-
-          addToCart({
-            id: selectedProduct.id,
-            name: selectedProduct.name,
-            image: selectedProduct.image,
-            price: Number(selectedProduct.price.replace(/[^0-9]/g, "")),
-            quantity: qty,
-          });
-
-          setShowQtyModal(false);
-          setSelectedProduct(null);
-        }}
       />
     </View>
   );

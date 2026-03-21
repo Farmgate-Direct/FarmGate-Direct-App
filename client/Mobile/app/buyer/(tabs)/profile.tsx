@@ -1,30 +1,54 @@
 import { Ionicons } from "@expo/vector-icons";
 import AntDesign from "@expo/vector-icons/AntDesign";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Image, Text, TouchableOpacity, View } from "react-native";
+
+const API_URL = "http://192.168.8.12:5000";
 
 const Profile = () => {
   const router = useRouter();
+
+  const [user, setUser] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  const handleLogout = () => {
+  /* ================= LOAD USER ================= */
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const storedUser = await AsyncStorage.getItem("user");
+        if (!storedUser) return;
+
+        const parsedUser = JSON.parse(storedUser);
+
+        const res = await fetch(`${API_URL}/users/${parsedUser.userId}`);
+        const data = await res.json();
+
+        setUser(data);
+      } catch (error) {
+        console.log("LOAD USER ERROR:", error);
+      }
+    };
+
+    loadUser();
+  }, []);
+
+  const handleLogout = async () => {
     setModalVisible(false);
-    router.replace("/login"); // redirect sa login page
+    await AsyncStorage.removeItem("user"); // clear session
+    router.replace("/login");
   };
 
   return (
     <View className="flex-1 bg-green-700">
-      {/* GREEN HEADER */}
-      <View className="h-44 bg-green-700 justify-center px-6">
+      {/* HEADER */}
+      <View className="h-44 justify-center px-6">
         <Text className="text-white text-2xl font-bold text-center">
           Profile
         </Text>
 
-        <TouchableOpacity
-          className="absolute right-8 top-16"
-          //onPress={() => router.push("/messages")}
-        >
+        <TouchableOpacity className="absolute right-8 top-16">
           <AntDesign name="message" size={28} color="white" />
         </TouchableOpacity>
       </View>
@@ -32,10 +56,14 @@ const Profile = () => {
       {/* WHITE CARD */}
       <View className="flex-1 bg-white rounded-t-[40px] items-center px-6 pt-24">
         {/* NAME */}
-        <Text className="text-xl font-bold text-gray-800">Soya ✓</Text>
+        <Text className="text-xl font-bold text-gray-800">
+          {user?.fullName || "Loading..."}
+        </Text>
 
         {/* EMAIL */}
-        <Text className="text-gray-400 text-sm mb-6">soyamy@gmail.com</Text>
+        <Text className="text-gray-400 text-sm mb-6">
+          {user?.email || ""}
+        </Text>
 
         {/* OPTIONS */}
         <TouchableOpacity
@@ -62,7 +90,6 @@ const Profile = () => {
           <Ionicons name="time-outline" size={20} color="#15803d" />
         </TouchableOpacity>
 
-        {/* SAVED FARMS (fixed route) */}
         <TouchableOpacity
           className="w-full flex-row items-center justify-between bg-gray-100 p-4 rounded-xl mb-4"
           onPress={() => router.push("/buyer/profile/saved-farms")}
@@ -71,28 +98,31 @@ const Profile = () => {
           <Ionicons name="heart-outline" size={20} color="#15803d" />
         </TouchableOpacity>
 
-        {/* LOG OUT */}
+        {/* LOGOUT */}
         <TouchableOpacity
           className="w-full flex-row items-center justify-between bg-red-50 p-4 rounded-xl mt-2"
-          onPress={() => setModalVisible(true)} // show modal instead of push
+          onPress={() => setModalVisible(true)}
         >
           <Text className="text-red-600 font-semibold">Log out</Text>
           <Ionicons name="log-out-outline" size={20} color="#dc2626" />
         </TouchableOpacity>
       </View>
 
-      {/* FLOATING PROFILE IMAGE */}
+      {/* PROFILE IMAGE */}
       <View className="absolute top-28 self-center items-center">
-        <View className="w-32 h-32 rounded-full border-4 border-white overflow-hidden bg-gray-200 shadow-lg">
-          <Image
-            //source={require("../assets/images/profile-pic.png")}
+        <View className="w-32 h-32 rounded-full border-4 border-white overflow-hidden bg-gray-200">
+          {/* <Image
+            source={
+              user?.profileImage
+                ? { uri: user.profileImage }
+                : require("../assets/images/default-avatar.png")
+            }
             className="w-full h-full"
-            resizeMode="cover"
-          />
+          /> */}
         </View>
       </View>
 
-      {/* LOGOUT CONFIRMATION MODAL */}
+      {/* MODAL */}
       {modalVisible && (
         <View className="absolute inset-0 justify-center items-center bg-black/40">
           <View className="bg-white rounded-2xl p-6 w-80">

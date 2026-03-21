@@ -1,141 +1,257 @@
-import { useCart } from "@/context/CartContext";
-import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import { useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
-  Image,
-  ScrollView,
+  View,
   Text,
+  ScrollView,
   TouchableOpacity,
-  View
+  Image,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const API_URL = "http://192.168.8.23:5000";
 
 export default function Checkout() {
-  const { cart } = useCart();
+  const { buyerId, items } = useLocalSearchParams();
+
+  const [cart, setCart] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const [delivery, setDelivery] = useState<"pickup" | "delivery">("pickup");
   const [payment, setPayment] = useState<"qr" | "cod">("qr");
+  const [buyerName, setBuyerName] = useState<string | null>(null);
 
-  const subTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const loadUser = async () => {
+    try {
+      const userString = await AsyncStorage.getItem("user");
+      if (!userString) {
+        router.replace("/login"); // redirect if not logged in
+        return;
+      }
+      const user = JSON.parse(userString);
+      setBuyerName(user.fullName); // <-- and buyerName
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  useEffect(() => {
+    loadUser();
+  }, []);
+
+  useEffect(() => {
+    if (items) {
+      setCart(JSON.parse(items as string));
+    }
+  }, []);
+
+  // subtotal
+  const subTotal = cart.reduce((sum, farm) => {
+    return (
+      sum +
+      farm.products.reduce(
+        (pSum: number, p: any) => pSum + parseFloat(p.price) * p.quantity,
+        0,
+      )
+    );
+  }, 0);
+
   const deliveryFee = delivery === "delivery" ? 35 : 0;
   const total = subTotal + deliveryFee;
 
+  const placeOrder = async () => {
+    if (!buyerId) {
+      Alert.alert("Error", "Buyer not found");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const res = await fetch(`${API_URL}/orders/${buyerId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          items: cart,
+          delivery,
+          payment,
+          buyerName,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message);
+      }
+
+      Alert.alert("Success", "Order placed!");
+
+      router.replace({
+        pathname: "/buyer/thankyou",
+        params: {
+          delivery,
+          payment,
+          subTotal,
+          deliveryFee,
+          total,
+        },
+      });
+    } catch (err) {
+      console.log(err);
+      Alert.alert("Error", "Checkout failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (cart.length === 0) {
     return (
-      <View className="flex-1 justify-center items-center bg-gray-100">
-        <Text className="text-gray-400 text-lg">Your cart is empty</Text>
+      <View className="flex-1 justify-center items-center">
+        <Text>No items to checkout</Text>
       </View>
     );
   }
 
   return (
     <View className="flex-1 bg-gray-100">
-      {/* Header */}
-      <View className="flex-row items-center px-4 pt-10 pb-4 bg-white">
+      {/* HEADER */}
+      <View className="flex-row items-center px-4 pt-14 pb-4 bg-white">
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={22} />
         </TouchableOpacity>
+
         <Text className="ml-3 text-lg font-semibold">Checkout</Text>
       </View>
 
-      <ScrollView className="px-4" contentContainerStyle={{ paddingBottom: 140 }}>
-        {/* Cart Items */}
-        <Text className="font-semibold text-base mt-4 mb-2">Items in your cart</Text>
-        {cart.map(item => (
-          <View key={item.id} className="flex-row bg-white p-3 rounded-xl mb-3">
-            <Image source={item.image} className="w-16 h-16 rounded-lg" />
-            <View className="flex-1 ml-3">
-              <Text className="font-semibold">{item.name}</Text>
-              <Text className="text-xs text-gray-500">₱{item.price.toFixed(2)} / kg</Text>
-              <Text className="text-xs text-gray-500 mt-1">Qty: {item.quantity}</Text>
-            </View>
-            <Text className="font-semibold">₱{(item.price * item.quantity).toFixed(2)}</Text>
-          </View>
-        ))}
+      <ScrollView
+        className="px-4"
+        contentContainerStyle={{ paddingBottom: 140 }}
+      >
+        {/* CART ITEMS */}
 
-        {/* Delivery Options */}
-        <Text className="font-semibold text-base mt-4 mb-2">Delivery Options</Text>
+        <Text className="font-semibold text-base mt-4 mb-2">Items</Text>
+
+        {cart.map((farm: any) =>
+          farm.products.map((p: any) => (
+            <View key={p.id} className="flex-row bg-white p-3 rounded-xl mb-3">
+              <Image
+                source={{ uri: p.image }}
+                className="w-16 h-16 rounded-lg bg-gray-200"
+              />
+
+              <View className="flex-1 ml-3">
+                <Text className="font-semibold">{p.name}</Text>
+
+                <Text className="text-xs text-gray-500">₱{p.price}</Text>
+
+                <Text className="text-xs text-gray-500 mt-1">
+                  Qty: {p.quantity}
+                </Text>
+              </View>
+
+              <Text className="font-semibold">
+                ₱{(parseFloat(p.price) * p.quantity).toFixed(2)}
+              </Text>
+            </View>
+          )),
+        )}
+
+        {/* DELIVERY */}
+
+        <Text className="font-semibold text-base mt-4 mb-2">Delivery</Text>
+
         <TouchableOpacity
           onPress={() => setDelivery("pickup")}
-          className={`flex-row items-center bg-white p-4 rounded-xl mb-3 ${delivery === "pickup" ? "border border-green-700" : ""}`}
+          className={`bg-white p-4 rounded-xl mb-3 flex-row items-center ${
+            delivery === "pickup" ? "border border-green-700" : ""
+          }`}
         >
-          <Ionicons name="leaf-outline" size={22} color="#15803d" />
-          <View className="flex-1 ml-3">
-            <Text className="font-semibold">Farm Pickup</Text>
-            <Text className="text-xs text-gray-500">Green Valley Farm • Tublacan</Text>
-          </View>
-          <Text className="text-green-700 font-semibold">Free</Text>
+          <Ionicons name="leaf-outline" size={22} />
+
+          <Text className="ml-3 font-semibold">Farm Pickup</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => setDelivery("delivery")}
-          className={`flex-row items-center bg-white p-4 rounded-xl mb-4 ${delivery === "delivery" ? "border border-green-700" : ""}`}
+          className={`bg-white p-4 rounded-xl mb-4 flex-row items-center ${
+            delivery === "delivery" ? "border border-green-700" : ""
+          }`}
         >
-          <Ionicons name="car-outline" size={22} color="#15803d" />
-          <View className="flex-1 ml-3">
-            <Text className="font-semibold">Schedule Delivery</Text>
-            <Text className="text-xs text-gray-500">Today</Text>
-          </View>
-          <Text className="font-semibold">₱35.00</Text>
+          <Ionicons name="car-outline" size={22} />
+
+          <Text className="ml-3 font-semibold">Delivery (+₱35)</Text>
         </TouchableOpacity>
 
-        {/* Payment */}
-        <Text className="font-semibold text-base mb-2">Payment Method</Text>
+        {/* PAYMENT */}
+
+        <Text className="font-semibold text-base mb-2">Payment</Text>
+
         <TouchableOpacity
           onPress={() => setPayment("qr")}
-          className={`flex-row items-center bg-white p-4 rounded-xl mb-3 ${payment === "qr" ? "border border-green-700" : ""}`}
+          className={`bg-white p-4 rounded-xl mb-3 flex-row items-center ${
+            payment === "qr" ? "border border-green-700" : ""
+          }`}
         >
           <Ionicons name="qr-code-outline" size={22} />
-          <Text className="ml-3 font-semibold">Gcash</Text>
+
+          <Text className="ml-3 font-semibold">GCash</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => setPayment("cod")}
-          className={`flex-row items-center bg-white p-4 rounded-xl mb-4 ${payment === "cod" ? "border border-green-700" : ""}`}
+          className={`bg-white p-4 rounded-xl mb-4 flex-row items-center ${
+            payment === "cod" ? "border border-green-700" : ""
+          }`}
         >
           <Ionicons name="cash-outline" size={22} />
+
           <Text className="ml-3 font-semibold">Cash on Delivery</Text>
         </TouchableOpacity>
 
-        {/* Order Summary */}
-        <Text className="font-semibold text-base mb-2">Order Summary</Text>
+        {/* SUMMARY */}
+
+        <Text className="font-semibold text-base mb-2">Summary</Text>
+
         <View className="bg-white rounded-xl p-4">
           <View className="flex-row justify-between mb-2">
-            <Text className="text-gray-500">Sub Total</Text>
+            <Text>Subtotal</Text>
             <Text>₱{subTotal.toFixed(2)}</Text>
           </View>
 
           <View className="flex-row justify-between mb-2">
-            <Text className="text-gray-500">Delivery Fee</Text>
+            <Text>Delivery Fee</Text>
             <Text>₱{deliveryFee.toFixed(2)}</Text>
           </View>
 
           <View className="flex-row justify-between">
-            <Text className="font-bold text-base">Total Amount</Text>
-            <Text className="font-bold text-base">₱{total.toFixed(2)}</Text>
+            <Text className="font-bold">Total</Text>
+            <Text className="font-bold">₱{total.toFixed(2)}</Text>
           </View>
         </View>
       </ScrollView>
 
-      {/* Sticky Place Order */}
+      {/* PLACE ORDER */}
+
       <View className="absolute bottom-0 left-0 right-0 bg-white p-4">
         <TouchableOpacity
-          disabled={cart.length === 0}
-          onPress={() =>
-            router.push({
-              pathname: "/buyer/thankyou",
-              params: {
-                delivery,
-                payment,
-                subTotal: subTotal.toString(),
-                deliveryFee: deliveryFee.toString(),
-                total: total.toString(),
-                cart: JSON.stringify(cart),
-              },
-            })
-          }
-          className={`py-4 rounded-xl ${cart.length === 0 ? "bg-gray-300" : "bg-green-700"}`}
+          disabled={loading}
+          onPress={placeOrder}
+          className={`py-4 rounded-xl ${
+            loading ? "bg-gray-400" : "bg-green-700"
+          }`}
         >
-          <Text className="text-white text-center font-bold text-lg">Place Order</Text>
+          {loading ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text className="text-white text-center font-bold text-lg">
+              Place Order
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
     </View>

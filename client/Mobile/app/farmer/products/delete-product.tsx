@@ -6,7 +6,7 @@ const DeleteProductModal = ({ visible, onCancel, onConfirm, message }) => {
     <Modal visible={visible} transparent animationType="fade">
       <View className="flex-1 bg-black/40 justify-center items-center px-6">
         <View className="bg-white rounded-2xl p-6 w-full">
-          <Text className="text-lg font-bold text-gray-800 mb-4">
+          <Text className="text-center text-lg font-bold text-gray-800 mb-4">
             {message || "Are you sure you want to delete this product?"}
           </Text>
 

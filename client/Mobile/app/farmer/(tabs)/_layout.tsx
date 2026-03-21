@@ -69,12 +69,26 @@ const Layout = () => {
         }}
       />
 
-       {/* Messages */}
+      {/* Orders */}
+      <Tabs.Screen
+        name="order"
+        options={{
+          tabBarIcon: ({ focused }) => (
+            <TabIcon focused={focused} icon="cube" title="Orders" />
+          ),
+        }}
+      />
+
+      {/* Messages */}
       <Tabs.Screen
         name="message"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon="chatbubble-ellipses" title="Message" />
+            <TabIcon
+              focused={focused}
+              icon="chatbubble-ellipses"
+              title="Message"
+            />
           ),
         }}
       />

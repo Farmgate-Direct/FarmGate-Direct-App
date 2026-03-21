@@ -130,7 +130,7 @@ const Layout = () => {
           backgroundColor: "#ffffff",
           borderTopWidth: 1,
           borderTopColor: "#e5e7eb",
-          paddingTop: 10,
+          paddingTop: 10
         },
         tabBarItemStyle: {
           flex: 1,
