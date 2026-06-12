@@ -20,3 +20,19 @@ router.put("/reject/:id", rejectUser);
 router.get("/stats", getStats);
 
 module.exports = router;
+
+// routes/adminRoutes.js
+// const express = require("express");
+// const router = express.Router();
+// const adminController = require("../controllers/admincontroller");
+
+// // Admin stats route
+// router.get("/admin/stats", adminController.getStats);
+
+// // Approve user route
+// router.put("/admin/approve/:id", adminController.approveUser);
+
+// // Reject user route
+// router.put("/admin/reject/:id", adminController.rejectUser);
+
+// module.exports = router;

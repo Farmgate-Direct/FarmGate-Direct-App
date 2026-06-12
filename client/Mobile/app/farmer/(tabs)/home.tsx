@@ -7,7 +7,7 @@ const Homepage = () => {
   return (
     <View className="flex-1 bg-green-800">
       {/* Header */}
-      <View className="bg-green-800 px-6 pt-16 pb-8">
+      <View className="bg-green-700 px-6 pt-16 pb-8">
         <View className="flex-row justify-between items-center">
           <View>
             <Text className="text-white text-[25px] font-bold">

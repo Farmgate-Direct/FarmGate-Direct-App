@@ -8,166 +8,176 @@ import {
   View,
   ActivityIndicator,
 } from "react-native";
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import AddProductModal from "../../farmer/products/add-product";
 import EditProductModal from "../../farmer/products/edit-product";
 import DeleteProductModal from "../../farmer/products/delete-product";
+import { deleteCartItemsByProductId } from "../../../src/services/cartService";
 
-const API_URL = "http://10.150.47.135:5000";
+import { ProductType, CreateProductInput } from "../../../src/types/product";
 
-interface ProductType {
-  id: string;
-  name: string;
-  category?: string;
-  price?: string;
-  unit?: string;
-  stock?: string;
-  status?: string;
-  freshness?: string;
-  description?: string;
-  image?: string;
-  farmerId?: string;
-  farmerName?: string;
-  farmName?: string;
-  rating?: string;
-}
+import { deleteCloudinaryImage } from "../../../src/services/deleteImageService";
+
+import {
+  addProduct,
+  deleteProduct,
+  getProductsByFarmer,
+  updateProduct,
+} from "../../../src/services/productService";
+
+import { uploadImageAsync } from "../../../src/services/cloudinaryService";
 
 const Product = () => {
   const [products, setProducts] = useState<ProductType[]>([]);
   const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
 
-  const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(
-    null,
-  );
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(null);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  /* ================= LOAD USER ================= */
+  // ================= USER =================
   useEffect(() => {
-    loadUser();
+    AsyncStorage.getItem("user").then((data) => {
+      if (data) setUser(JSON.parse(data));
+    });
   }, []);
 
-  const loadUser = async () => {
-    try {
-      const storedUser = await AsyncStorage.getItem("user");
-
-      if (storedUser) {
-        const parsedUser = JSON.parse(storedUser);
-        console.log("LOGGED USER:", parsedUser);
-        setUser(parsedUser);
-      }
-    } catch (error) {
-      console.log("USER LOAD ERROR:", error);
-    }
-  };
-
-  /* ================= FETCH PRODUCTS ================= */
+  // ================= FETCH =================
   useEffect(() => {
-    if (user) {
-      fetchProducts();
-    }
+    if (user) fetchProducts();
   }, [user]);
 
   const fetchProducts = async () => {
     try {
-      let url = `${API_URL}/products?farmerId=${user.userId}`;
-
-      const res = await fetch(url);
-      const data = await res.json();
-
+      const data = await getProductsByFarmer(user.uid);
       setProducts(data);
     } catch (error) {
-      console.log("FETCH ERROR:", error);
+      console.log(error);
     } finally {
       setLoading(false);
     }
   };
-  const handleAddProduct = async (product: ProductType) => {
 
-  const newProduct = {
+  // ================= ADD =================
+  const handleAddProduct = async (product: CreateProductInput) => {
+    try {
+      setUploading(true);
 
-    ...product,
+      const upload = await uploadImageAsync(product.image);
 
-    farmerId: user.userId,
-    farmerName: user.fullName,
-    farmName: user.farmName,
+      const newProduct: CreateProductInput = {
+        ...product,
+        image: upload.imageUrl,
+        imagePublicId: upload.publicId,
+        farmerId: user.uid,
+        farmerName: user.fullName,
+        farmName: user.farmName,
+        rating: 0,
+        totalSales: 0,
+        weeklySales: 0,
+        monthlySales: 0,
+        createdAt: Date.now(),
+      };
 
-    rating: 0,
-    createdAt: Date.now()
-
+      await addProduct(newProduct);
+      fetchProducts();
+      setShowAddModal(false);
+    } catch (err) {
+      console.log(err);
+    } finally {
+      setUploading(false);
+    }
   };
 
-  await fetch(`${API_URL}/products`, {
-
-    method: "POST",
-
-    headers: {
-      "Content-Type": "application/json"
-    },
-
-    body: JSON.stringify(newProduct)
-
-  });
-
-  fetchProducts();
-};
-
-  /* ================= EDIT PRODUCT ================= */
-  const handleEditProduct = async (updatedProduct: ProductType) => {
+  // ================= EDIT =================
+  const handleEditProduct = async (product: ProductType) => {
     try {
-      await fetch(`${API_URL}/products/${updatedProduct.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(updatedProduct),
+      setEditing(true);
+
+      let imageUrl = product.image;
+      let imagePublicId = product.imagePublicId;
+
+      if (!imageUrl.startsWith("https://")) {
+        await deleteCloudinaryImage(product.imagePublicId);
+
+        const upload = await uploadImageAsync(imageUrl);
+
+        imageUrl = upload.imageUrl;
+        imagePublicId = upload.publicId;
+      }
+
+      await updateProduct({
+        ...product,
+        image: imageUrl,
+        imagePublicId,
       });
 
       fetchProducts();
       setShowEditModal(false);
-    } catch (error) {
-      console.log("EDIT ERROR:", error);
+    } catch (err) {
+      console.log(err);
+    } finally {
+      setEditing(false);
     }
   };
 
-  /* ================= DELETE PRODUCT ================= */
+  // ================= DELETE =================
   const handleDeleteProduct = async () => {
-    if (!selectedProduct) return;
+    if (!selectedProduct?.docId) return;
 
     try {
-      await fetch(`${API_URL}/products/${selectedProduct.id}`, {
-        method: "DELETE",
-      });
+      setDeleting(true);
+
+      if (selectedProduct.imagePublicId) {
+        await deleteCloudinaryImage(selectedProduct.imagePublicId);
+      }
+
+
+      // 2. DELETE PRODUCT SA FIRESTORE
+      await deleteProduct(selectedProduct.docId);
+
+      // 3. DELETE ALL CART ITEMS RELATED TO PRODUCT
+      await deleteCartItemsByProductId(selectedProduct.docId);
+
 
       fetchProducts();
       setShowDeleteModal(false);
-    } catch (error) {
-      console.log("DELETE ERROR:", error);
+    } catch (err) {
+      console.log(err);
+    } finally {
+      setDeleting(false);
     }
   };
 
-  /* ================= LOADING ================= */
+  // ================= LOADING =================
   if (loading) {
     return (
       <View className="flex-1 justify-center items-center bg-green-800">
-        <ActivityIndicator size="large" color="#fff" />
+        <ActivityIndicator color="#fff" size="large" />
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-green-800">
-      {/* HEADER */}
-      <View className="bg-green-800 px-6 pt-16 pb-6">
+    <View className="flex-1 bg-green-700">
+
+      {/* HEADER (UNCHANGED UI) */}
+      <View className="px-6 pt-16 pb-6">
         <View className="flex-row justify-between items-center">
           <View>
             <Text className="text-white text-[25px] font-bold">
               Product Listing
             </Text>
+
             <Text className="text-white text-[15px]">
               {products.length} Products listed
             </Text>
@@ -181,9 +191,10 @@ const Product = () => {
         </View>
       </View>
 
-      {/* PRODUCTS */}
+      {/* LIST (UNCHANGED UI STRUCTURE) */}
       <View className="flex-1 bg-gray-100 rounded-t-[35px] px-6 pt-6">
         <ScrollView showsVerticalScrollIndicator={false}>
+
           {products.length === 0 && (
             <Text className="text-center text-gray-500 mt-10">
               No products available
@@ -192,9 +203,10 @@ const Product = () => {
 
           {products.map((product) => (
             <View
-              key={product.id}
+              key={product.docId}
               className="bg-white rounded-2xl p-4 mb-4 flex-row items-center"
             >
+
               {product.image ? (
                 <Image
                   source={{ uri: product.image }}
@@ -208,18 +220,27 @@ const Product = () => {
                 <Text className="text-xs text-gray-400">
                   {product.farmName}
                 </Text>
+
                 <Text className="font-semibold text-gray-800">
                   {product.name}
                 </Text>
-                <Text className="text-gray-600">{product.stock}</Text>
-                <Text className="text-gray-600">{product.status}</Text>
+
+                <Text className="text-gray-600">
+                  {product.stock} {product.unit} In Stock
+                </Text>
+
+                <Text className="text-gray-600">
+                  {product.status}
+                </Text>
+
                 <Text className="font-bold text-gray-800">
-                  ₱{product.price}.00
+                  ₱{product.price.toFixed(2)}
                 </Text>
               </View>
 
               {user?.role === "farmer" && (
                 <View className="justify-between items-center h-20">
+
                   <TouchableOpacity
                     className="bg-blue-100 p-2 rounded-lg mb-2"
                     onPress={() => {
@@ -239,17 +260,22 @@ const Product = () => {
                   >
                     <MaterialIcons name="delete" size={18} color="#dc2626" />
                   </TouchableOpacity>
+
                 </View>
               )}
+
             </View>
           ))}
+
         </ScrollView>
       </View>
 
+      {/* MODALS (UNCHANGED) */}
       <AddProductModal
         visible={showAddModal}
         onClose={() => setShowAddModal(false)}
         onSave={handleAddProduct}
+        loading={uploading}
       />
 
       {selectedProduct && (
@@ -258,16 +284,18 @@ const Product = () => {
           product={selectedProduct}
           onClose={() => setShowEditModal(false)}
           onSave={handleEditProduct}
+          loading={editing}
         />
       )}
 
-      {selectedProduct && (
-        <DeleteProductModal
-          visible={showDeleteModal}
-          onCancel={() => setShowDeleteModal(false)}
-          onConfirm={handleDeleteProduct}
-        />
-      )}
+      <DeleteProductModal
+        visible={showDeleteModal}
+        product={selectedProduct}
+        onCancel={() => setShowDeleteModal(false)}
+        onConfirm={handleDeleteProduct}
+        loading={deleting}
+      />
+
     </View>
   );
 };

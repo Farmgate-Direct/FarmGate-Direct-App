@@ -1,5 +1,6 @@
+// farmer/products/edit-product.tsx
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Modal,
   ScrollView,
@@ -8,10 +9,27 @@ import {
   TouchableOpacity,
   View,
   Image,
+  ActivityIndicator,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import { ProductType } from "../../../src/types/product";
 
-const EditProductModal = ({ visible, onClose, product, onSave }) => {
+type Props = {
+  visible: boolean;
+  onClose: () => void;
+  product: ProductType;
+  onSave: (product: ProductType) => Promise<void>;
+  loading: boolean;
+};
+
+type DropdownProps = {
+  label: string;
+  value: string;
+  options: string[];
+  onSelect: (value: string) => void;
+};
+
+const EditProductModal = ({ visible, onClose, product, onSave, loading }: Props) => {
   const [name, setName] = useState("");
   const [category, setCategory] = useState("Vegetables");
   const [price, setPrice] = useState("");
@@ -20,77 +38,130 @@ const EditProductModal = ({ visible, onClose, product, onSave }) => {
   const [status, setStatus] = useState("Available");
   const [freshness, setFreshness] = useState("1 day");
   const [description, setDescription] = useState("");
-  const [image, setImage] = useState(null);
+  const [image, setImage] = useState("");
+  const [error, setError] = useState("");
 
+  // ================= OPTIONS =================
   const categories = ["Fruits", "Egg & Poultry", "Vegetables", "Rice"];
-  const units = ["per kg"];
-  const statuses = ["Available", "Out of Stock"];
-  const freshnessOptions = ["1 day", "2 days", "3 days", "4 days", "5 days"];
+  const units = ["per kg", "per pcs"];
+  const statuses = ["Available", "Out of Stock",];
+  const freshnessOptions = [
+    "1 day",
+    "2 days",
+    "3 days",
+    "4 days",
+    "5 days",
+    "6 days",
+    "7 days",
+    "8 days",
+    "9 days",
+    "10 days",
+  ];
 
-  // Populate state when product changes
+  // ================= LOAD PRODUCT =================
   useEffect(() => {
     if (product) {
       setName(product.name || "");
       setCategory(product.category || "Vegetables");
-      setPrice(product.price?.replace("₱", "").replace(".00", "") || "");
+      setPrice(product.price?.toString() || "");
       setUnit(product.unit || "per kg");
-      setStock(product.stock?.replace(" kg In Stock", "") || "");
+      setStock(product.stock?.toString() || "");
       setStatus(product.status || "Available");
       setFreshness(product.freshness || "1 day");
       setDescription(product.description || "");
-      setImage(product.image || null);
+      setImage(product.image || "");
     }
   }, [product]);
 
-  // Image picker
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      base64: true,
-      quality: 0.5,
-    });
+  // ================= VALIDATION =================
+  const isFormValid =
+    name.trim() !== "" &&
+    category.trim() !== "" &&
+    price !== "" &&
+    stock !== "" &&
+    unit.trim() !== "" &&
+    status.trim() !== "" &&
+    description.trim() !== "" &&
+    image.trim() !== "";
 
-    if (!result.canceled) {
-      setImage(`data:image/jpeg;base64,${result.assets[0].base64}`);
+  // ================= IMAGE PICKER =================
+  const pickImage = async () => {
+    const result =
+      await ImagePicker.launchImageLibraryAsync(
+        {
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.5,
+        }
+      );
+
+    if (!result.canceled && result.assets?.length > 0) {
+      setImage(result.assets[0].uri || "");
     }
   };
 
-  // Save handler with consistent formatting
-  const handleSave = () => {
-    onSave({
+  // ================= INPUT VALIDATION =================
+  const handlePriceChange = (text: string) => {
+    if (/^\d*$/.test(text)) {
+      setPrice(text);
+    }
+  };
+
+  const handleStockChange = (text: string) => {
+    if (/^\d*$/.test(text)) {
+      setStock(text);
+    }
+  };
+
+  // ================= SAVE =================
+
+  const handleSave = async () => {
+    if (!isFormValid) {
+      setError("Please fill in all fields.");
+      return;
+    }
+
+    setError("");
+
+    await onSave({
       ...product,
-      name: name.trim() || "Unnamed Product",
-      category: category || "Vegetables",
-      price: `₱${price}.00` || "₱70.00",
-      unit: unit || "per kg",
-      stock: `${stock} kg In Stock` || "20 kg In Stock",
-      status: status || "Available",
-      freshness: freshness || "1 day",
-      description: description || "",
-      image: image || "",
+      name,
+      category,
+      price: Number(price),
+      stock: Number(stock),
+      freshness,
+      unit,
+      status,
+      description,
+      image,
     });
+
     onClose();
   };
 
-  // Dropdown component
-  const Dropdown = ({ label, value, options, onSelect }) => {
+  // ================= DROPDOWN =================
+  const Dropdown = ({ label, value, options, onSelect, }: DropdownProps) => {
     const [open, setOpen] = useState(false);
-
     return (
       <View className="mb-4">
-        <Text className="text-xs text-gray-500 mb-1">{label}</Text>
+        <Text className="text-xs text-gray-500 mb-1">
+          {label}
+        </Text>
+
         <TouchableOpacity
-          className="bg-gray-100 rounded-xl px-4 py-3 flex-row justify-between items-center border border-gray-300"
           onPress={() => setOpen(!open)}
+          className="bg-gray-100 px-4 py-3 rounded-xl border border-gray-300 flex-row justify-between items-center"
         >
-          <Text className="text-gray-800">{value}</Text>
+          <Text>{value}</Text>
+
           <Ionicons
             name={open ? "chevron-up" : "chevron-down"}
-            size={20}
-            color="#4B5563"
+            size={18}
           />
         </TouchableOpacity>
+
         {open && (
-          <View className="bg-white rounded-xl mt-1 border border-gray-300 shadow-md overflow-hidden">
+          <View className="border border-gray-300 rounded-xl mt-1 overflow-hidden bg-white">
+
             {options.map((opt) => (
               <TouchableOpacity
                 key={opt}
@@ -98,9 +169,11 @@ const EditProductModal = ({ visible, onClose, product, onSave }) => {
                   onSelect(opt);
                   setOpen(false);
                 }}
-                className={`px-4 py-3 rounded ${opt === value ? "bg-green-700" : "bg-white"}`}
+                className={`px-4 py-3 ${opt === value ? "bg-green-700" : "bg-white"}`}
               >
-                <Text className={`${opt === value ? "text-white" : "text-gray-800"}`}>
+                <Text
+                  className={opt === value ? "text-white" : "text-black"}
+                >
                   {opt}
                 </Text>
               </TouchableOpacity>
@@ -112,26 +185,46 @@ const EditProductModal = ({ visible, onClose, product, onSave }) => {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+    >
       <View className="flex-1 bg-black/40 justify-center px-6">
         <View className="bg-white rounded-3xl p-6 max-h-[90%]">
           <ScrollView showsVerticalScrollIndicator={false}>
-            <Text className="text-lg font-bold text-gray-800 mb-4">Edit Product</Text>
 
-            <Text className="text-xs text-gray-500 mb-1">PRODUCT NAME</Text>
+            <Text className="text-lg font-bold mb-4">
+              Edit Product
+            </Text>
+
+            {error ? (
+              <Text className="text-red-500 mb-3">
+                {error}
+              </Text>
+            ) : null}
+
+            {/* PRODUCT NAME */}
+            <Text className="text-xs text-gray-500 mb-1">
+              PRODUCT NAME
+            </Text>
+
             <TextInput
-              className="bg-gray-100 rounded-xl px-4 py-3 mb-4 border border-gray-300"
-              placeholder="Enter product name"
               value={name}
               onChangeText={setName}
+              placeholder="Enter product name"
+              className="bg-gray-100 px-4 py-3 rounded-xl mb-4 border border-gray-300"
             />
 
+            {/* CATEGORY */}
             <Dropdown
               label="CATEGORY"
               value={category}
               options={categories}
               onSelect={setCategory}
             />
+
+            {/* UNIT */}
             <Dropdown
               label="UNIT"
               value={unit}
@@ -139,30 +232,40 @@ const EditProductModal = ({ visible, onClose, product, onSave }) => {
               onSelect={setUnit}
             />
 
-            <Text className="text-xs text-gray-500 mb-1">PRICE (₱)</Text>
+            {/* PRICE */}
+            <Text className="text-xs text-gray-500 mb-1">
+              PRICE (₱)
+            </Text>
+
             <TextInput
-              className="bg-gray-100 rounded-xl px-4 py-3 mb-4 border border-gray-300"
-              placeholder="Enter price"
-              keyboardType="numeric"
               value={price}
-              onChangeText={setPrice}
-            />
-
-            <Text className="text-xs text-gray-500 mb-1">STOCK QTY</Text>
-            <TextInput
-              className="bg-gray-100 rounded-xl px-4 py-3 mb-4 border border-gray-300"
-              placeholder="Enter stock quantity"
+              onChangeText={handlePriceChange}
               keyboardType="numeric"
-              value={stock}
-              onChangeText={setStock}
+              placeholder="Enter price"
+              className="bg-gray-100 px-4 py-3 rounded-xl mb-4 border border-gray-300"
             />
 
+            {/* STOCK */}
+            <Text className="text-xs text-gray-500 mb-1">
+              STOCK
+            </Text>
+            <TextInput
+              value={stock}
+              onChangeText={handleStockChange}
+              keyboardType="numeric"
+              placeholder="Enter stock"
+              className="bg-gray-100 px-4 py-3 rounded-xl mb-4 border border-gray-300"
+            />
+
+            {/* STATUS */}
             <Dropdown
               label="STATUS"
               value={status}
               options={statuses}
               onSelect={setStatus}
             />
+
+            {/* FRESHNESS */}
             <Dropdown
               label="FRESHNESS"
               value={freshness}
@@ -170,43 +273,62 @@ const EditProductModal = ({ visible, onClose, product, onSave }) => {
               onSelect={setFreshness}
             />
 
-            <Text className="text-xs text-gray-500 mb-1">DESCRIPTION</Text>
+            {/* DESCRIPTION */}
+            <Text className="text-xs text-gray-500 mb-1">
+              DESCRIPTION
+            </Text>
+
             <TextInput
-              className="bg-gray-100 rounded-xl px-4 py-3 mb-4 h-24 border border-gray-300"
-              placeholder="Describe your product..."
-              multiline
               value={description}
               onChangeText={setDescription}
+              multiline
+              placeholder="Describe product..."
+              className="bg-gray-100 px-4 py-3 rounded-xl mb-4 h-24 border border-gray-300"
             />
 
-            <Text className="text-xs text-gray-500 mb-1">IMAGE</Text>
+            {/* IMAGE */}
+            <Text className="text-xs text-gray-500 mb-1">
+              IMAGE
+            </Text>
+
             <TouchableOpacity
-              className="bg-gray-100 rounded-xl px-4 py-3 mb-6 items-center border border-gray-300"
               onPress={pickImage}
+              className="bg-gray-100 p-4 rounded-xl items-center mb-6 border border-gray-300"
             >
               {image ? (
-                <Image
-                  source={{ uri: image }}
-                  className="w-24 h-24 rounded-lg"
+                <Image source={{ uri: image, }} className="w-24 h-24 rounded-lg"
                 />
               ) : (
-                <Text className="text-gray-500">Select Image</Text>
+                <Text className="text-gray-500">
+                  Select Image
+                </Text>
               )}
             </TouchableOpacity>
 
+            {/* BUTTONS */}
             <View className="flex-row justify-between">
+
               <TouchableOpacity
                 onPress={onClose}
                 className="w-[48%] border border-green-700 py-3 rounded-xl items-center"
               >
-                <Text className="text-green-700 font-semibold">Cancel</Text>
+                <Text className="text-green-700 font-semibold">
+                  Cancel
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={handleSave}
-                className="w-[48%] bg-green-700 py-3 rounded-xl items-center"
+                disabled={!isFormValid || loading}
+                className={`w-[48%] py-3 rounded-xl items-center ${isFormValid && !loading ? "bg-green-700" : "bg-gray-400"}`}
               >
-                <Text className="text-white font-semibold">Save</Text>
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text className="text-white font-bold">
+                    Save
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </ScrollView>

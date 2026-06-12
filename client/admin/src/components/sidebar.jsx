@@ -35,16 +35,7 @@ const Sidebar = () => {
           Request Approval
         </NavLink>
 
-        <NavLink
-          to="/orders"
-          className={({ isActive }) =>
-            `px-4 py-3 rounded-lg transition hover:bg-green-700 ${
-              isActive ? "bg-green-700" : "bg-green-900"
-            }`
-          }
-        >
-          Orders & Payments
-        </NavLink>
+       
 
         <NavLink
           to="/users"
@@ -66,6 +57,15 @@ const Sidebar = () => {
           }
         >
           Reports & Analytics
+        </NavLink> <NavLink
+          to="/orders"
+          className={({ isActive }) =>
+            `px-4 py-3 rounded-lg transition hover:bg-green-700 ${
+              isActive ? "bg-green-700" : "bg-green-900"
+            }`
+          }
+        >
+          Orders & Payments
         </NavLink>
          <NavLink
           to="/logout"

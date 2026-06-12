@@ -15,11 +15,7 @@ const register = (req, res) => {
     barangay,
     municipality,
     province,
-    farmPhoto,
-    productPhoto,
     validID,
-    farmerCert,
-    rsbaCert,
     photo,
   } = req.body;
 
@@ -39,11 +35,7 @@ const register = (req, res) => {
     barangay: barangay || null,
     municipality: municipality || null,
     province: province || null,
-    farmPhoto: farmPhoto || null,
-    productPhoto: productPhoto || null,
     validID: validID || null,
-    farmerCert: farmerCert || null,
-    rsbaCert: rsbaCert || null,
     photo: photo || null,
   };
 

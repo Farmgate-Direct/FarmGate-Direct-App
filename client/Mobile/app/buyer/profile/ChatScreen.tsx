@@ -1,0 +1,181 @@
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import {
+  createChatId,
+  listenMessages,
+  sendMessage,
+} from "../../../src/services/chatService";
+
+const BuyerChatScreen = () => {
+  const router = useRouter();
+  const { farmerId, farmerName } = useLocalSearchParams();
+
+  const [messages, setMessages] = useState<any[]>([]);
+  const [text, setText] = useState("");
+  const [buyerId, setBuyerId] = useState("");
+  const [chatId, setChatId] = useState("");
+
+  const flatListRef = useRef<FlatList>(null);
+
+  useEffect(() => {
+    let unsubscribe: any;
+
+    const loadUser = async () => {
+      try {
+        const userStr = await AsyncStorage.getItem("user");
+        if (!userStr) return;
+
+        const user = JSON.parse(userStr);
+        setBuyerId(user.uid);
+
+        const id = createChatId(user.uid, String(farmerId));
+        setChatId(id);
+
+        // ✅ store unsubscribe
+        unsubscribe = listenMessages(id, setMessages);
+      } catch (error) {
+        console.log(error);
+      }
+    };
+
+    loadUser();
+
+    return () => {
+      if (unsubscribe) unsubscribe(); // ✅ cleanup
+    };
+  }, []);
+
+  const handleSend = async () => {
+    if (!text.trim() || !chatId || !buyerId) return;
+
+    await sendMessage({
+      chatId,
+      senderId: buyerId,
+      receiverId: String(farmerId),
+      text,
+    });
+
+    setText("");
+  };
+
+  return (
+    <KeyboardAvoidingView
+      className="flex-1 bg-green-700"
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      {/* HEADER */}
+      <View className="bg-green-700 px-6 pt-16 pb-4 flex-row items-center">
+        <TouchableOpacity onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={24} color="white" />
+        </TouchableOpacity>
+
+        <View className="w-10 h-10 rounded-full bg-green-200 items-center justify-center ml-3">
+          <Ionicons name="person" size={20} color="#15803d" />
+        </View>
+
+        <Text className="text-white text-xl font-bold ml-3">
+          {farmerName || "Farmer"}
+        </Text>
+      </View>
+
+      {/* CHAT */}
+      <View className="flex-1 bg-gray-100 rounded-t-[30px] px-4 pt-4">
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          onContentSizeChange={() =>
+            flatListRef.current?.scrollToEnd({ animated: true })
+          }
+          ListEmptyComponent={
+            <View className="items-center mt-20">
+              <Ionicons
+                name="chatbubble-outline"
+                size={50}
+                color="#d1d5db"
+              />
+              <Text className="text-gray-400 mt-3">
+                No messages yet. Say hi!
+              </Text>
+            </View>
+          }
+          renderItem={({ item }) => {
+            const isMe = item.senderId === buyerId;
+
+            return (
+              <View
+                className={`mb-3 flex-row ${
+                  isMe ? "justify-end" : "justify-start"
+                }`}
+              >
+                <View
+                  className={`px-4 py-2 rounded-2xl max-w-[75%] ${
+                    isMe
+                      ? "bg-green-600 rounded-br-none"
+                      : "bg-white rounded-bl-none"
+                  }`}
+                >
+                  <Text
+                    className={
+                      isMe ? "text-white" : "text-gray-800"
+                    }
+                  >
+                    {item.text}
+                  </Text>
+                  <Text
+                    className={`text-[10px] mt-1 ${
+                      isMe ? "text-green-200" : "text-gray-400"
+                    }`}
+                  >
+                    {item.createdAt?.toDate
+                      ? item.createdAt
+                          .toDate()
+                          .toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                      : ""}
+                  </Text>
+                </View>
+              </View>
+            );
+          }}
+        />
+      </View>
+
+      {/* INPUT */}
+      <View className="bg-white px-3 py-2 mb-5">
+        <View className="flex-row items-center bg-gray-100 rounded-full px-2 py-1">
+          <TextInput
+            placeholder="Type a message..."
+            className="flex-1 px-2 py-2 text-gray-700"
+            placeholderTextColor="#9ca3af"
+            value={text}
+            onChangeText={setText}
+            onSubmitEditing={handleSend}
+          />
+          <TouchableOpacity
+            onPress={handleSend}
+            className="bg-green-600 p-3 rounded-full"
+          >
+            <Ionicons name="send" size={18} color="white" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </KeyboardAvoidingView>
+  );
+};
+
+export default BuyerChatScreen;

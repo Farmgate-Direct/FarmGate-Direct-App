@@ -94,6 +94,8 @@ const checkout = (req, res) => {
     orders: newOrders
   });
 };
+
+
 const getFarmerOrders = (req, res) => {
   const { farmerId } = req.params;
   if (!farmerId) return res.status(400).json({ message: "farmerId required" });
@@ -128,5 +130,22 @@ const updateOrderStatus = (req, res) => {
   res.json({ message: "Order status updated", order });
 }
 
-module.exports = { checkout, getFarmerOrders, getOrderById, updateOrderStatus };
+const getBuyerOrders = (req, res) => {
+  const { buyerId } = req.params;
+  if (!buyerId) {
+    return res.status(400).json({ message: "buyerId required" });
+  }
+
+  const orders = readJSON(ORDERS_FILE) || [];
+
+  const buyerOrders = orders.filter(
+    (o) => String(o.buyerId) === String(buyerId)
+  );
+
+  buyerOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  res.json(buyerOrders);
+}
+
+module.exports = { checkout, getFarmerOrders, getOrderById, updateOrderStatus, getBuyerOrders };
 

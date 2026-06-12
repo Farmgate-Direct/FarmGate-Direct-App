@@ -1,79 +1,76 @@
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { useEffect, useState, useRef } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AntDesign, Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  Image,
-  TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Animated,
   FlatList,
   Modal,
-  Animated,
+  ScrollView,
+  StatusBar,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  AntDesign,
-  FontAwesome5,
-  Ionicons,
-  MaterialIcons,
-} from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 
-const API_URL = "http://192.168.8.23:5000";
+import { addToCart } from "@/src/services/cartService";
+import { getProductById } from "@/src/services/productService";
+import { ProductType } from "@/src/types/product";
+
+const MOCK_REVIEWS = [
+  { id: "1", user: "Buyer12345", date: "2 months ago", rating: 5, comment: "Fresh and organic, highly recommend!" },
+  { id: "2", user: "Buyer67890", date: "1 month ago", rating: 4, comment: "Good quality but a bit pricey." },
+];
 
 export default function ProductDetails() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
-  const [product, setProduct] = useState<any>(null);
+
+  const [product, setProduct] = useState<ProductType | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"details" | "reviews">("details");
-
-  const [buyerId, setBuyerId] = useState<string | null>(null);
-  const [buyerName, setBuyerName] = useState<string | null>(null);
-
-  // Bottom modal
+  const [buyerId, setBuyerId] = useState("");
+  const [buyerName, setBuyerName] = useState("");
+  const [quantity, setQuantity] = useState(1);
   const [modalVisible, setModalVisible] = useState(false);
   const [modalMode, setModalMode] = useState<"cart" | "buynow">("cart");
-  const [quantity, setQuantity] = useState(1);
+
   const slideAnim = useRef(new Animated.Value(300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  const reviews = [
-    { id: "1", user: "Buyer12345", date: "2 months ago", rating: 5, comment: "Fresh and organic, highly recommend!" },
-    { id: "2", user: "Buyer67890", date: "1 month ago", rating: 4, comment: "Good quality but a bit pricey." },
-  ];
-
   useEffect(() => {
-    fetchProduct();
-    getUserInfo();
+    loadProduct();
+    loadUser();
   }, []);
 
-  const getUserInfo = async () => {
+  const loadUser = async () => {
     try {
-      const userData = await AsyncStorage.getItem("user");
-      if (!userData) return;
-      const user = JSON.parse(userData);
-      setBuyerId(user.userId);
-      setBuyerName(user.fullName);
-    } catch (err) {
-      console.log("Failed to load user info", err);
+      const data = await AsyncStorage.getItem("user");
+      if (!data) return;
+      const user = JSON.parse(data);
+      setBuyerId(user.uid || user.userId || user.id || "");
+      setBuyerName(user.fullName || user.name || "");
+    } catch (e) {
+      console.log(e);
     }
   };
 
-  const fetchProduct = async () => {
+  const loadProduct = async () => {
     try {
-      const res = await fetch(`${API_URL}/products`);
-      const data = await res.json();
-      const prod = data.find((p: any) => String(p.id) === String(id));
-      setProduct(prod);
-    } catch (err) {
-      console.log(err);
+      if (!id) return;
+      const data = await getProductById(String(id));
+      setProduct(data);
+    } catch (e) {
+      console.log(e);
     } finally {
       setLoading(false);
     }
   };
 
-  // Show modal
   const openModal = (mode: "cart" | "buynow") => {
     setModalMode(mode);
     setQuantity(1);
@@ -91,200 +88,392 @@ export default function ProductDetails() {
     ]).start(() => setModalVisible(false));
   };
 
-  const handleConfirm = async () => {
-    if (!product) return;
-
-    if (modalMode === "cart") {
-      if (!buyerId || !buyerName) {
-        Alert.alert("Error", "You must be logged in to add items to cart.");
-        return;
-      }
-      try {
-        await fetch(`${API_URL}/cart`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            buyerId,
-            buyerName,
-            farmName: product.farmName,
-            farmerId: product.farmerId,
-            id: product.id,
-            name: product.name,
-            price: product.price,
-            image: product.image,
-            quantity,
-          }),
-        });
-        Alert.alert("Added to Cart", `${product.name} x${quantity} added.`);
-      } catch (err) {
-        Alert.alert("Error", "Failed to add to cart.");
-      }
-      closeModal();
+  const handleAddToCart = async () => {
+    if (!product?.docId) return;
+    if (!buyerId) {
+      Alert.alert("Sign in required", "Please log in to add items to your cart.");
       return;
     }
-
-    // Buy Now
-    if (!buyerId) return;
-
-    const itemsToCheckout = [
-      {
-        farmName: product.farmName,
+    try {
+      await addToCart({
+        productId: product.docId,
+        buyerId,
+        buyerName,
         farmerId: product.farmerId,
-        products: [
-          {
-            id: product.id,
-            name: product.name,
-            price: product.price,
-            image: product.image,
-            quantity,
-          },
-        ],
-      },
-    ];
+        farmName: product.farmName,
+        name: product.name,
+        image: product.image,
+        price: product.price,
+        quantity,
+        unit: product.unit,
+        createdAt: Date.now(),
+      });
+      Alert.alert("Added to cart!", `${product.name} is ready for checkout.`);
+      closeModal();
+    } catch {
+      Alert.alert("Error", "Failed to add to cart. Please try again.");
+    }
+  };
 
+  const handleBuyNow = () => {
+    if (!product) return;
     closeModal();
     router.push({
       pathname: "/buyer/checkout",
-      params: { items: JSON.stringify(itemsToCheckout), buyerId },
+      params: {
+        items: JSON.stringify([{
+          farmName: product.farmName,
+          farmerId: product.farmerId,
+          products: [{ docId: product.docId, name: product.name, price: product.price, image: product.image, quantity }],
+        }]),
+        buyerId,
+      },
     });
   };
 
-  if (loading)
-    return <ActivityIndicator size="large" color="#16a34a" className="flex-1 justify-center items-center" />;
-  if (!product) return <Text className="text-center mt-10">Product not found</Text>;
+  // ── LOADING ──
+  if (loading) {
+    return (
+      <View className="flex-1 justify-center items-center bg-white">
+        <ActivityIndicator size="large" color="#15803d" />
+        <Text className="mt-3 text-green-700 font-semibold text-sm">Loading product…</Text>
+      </View>
+    );
+  }
+
+  // ── NOT FOUND ──
+  if (!product) {
+    return (
+      <View className="flex-1 justify-center items-center bg-white px-8">
+        <Text className="text-5xl mb-4">🌿</Text>
+        <Text className="text-gray-700 font-bold text-lg">Product not found</Text>
+        <TouchableOpacity onPress={() => router.back()} className="mt-4 bg-green-700 px-6 py-3 rounded-2xl">
+          <Text className="text-white font-semibold">Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const avgRating =
+    MOCK_REVIEWS.reduce((s, r) => s + r.rating, 0) / MOCK_REVIEWS.length;
 
   return (
     <View className="flex-1 bg-white">
-      {/* Image with back button */}
-      <View className="relative">
-        <Image source={{ uri: product.image }} className="w-full h-80" resizeMode="cover" />
+      <StatusBar barStyle="light-content" />
+
+      {/* ── HERO IMAGE ── */}
+      <View className="w-full aspect-square bg-[#f0fdf4]">
+        {product.image ? (
+          <Image
+            source={{ uri: product.image }}
+            style={{ width: "100%", height: "100%" }}
+            contentFit="cover"
+          />
+        ) : (
+          <View className="flex-1 items-center justify-center">
+            <Ionicons name="leaf-outline" size={64} color="#86efac" />
+          </View>
+        )}
+
+        {/* Gradient fade for back button readability */}
+        <LinearGradient
+          colors={["rgba(0,0,0,0.35)", "transparent"]}
+          className="absolute top-0 left-0 right-0 h-36"
+        />
+
+        {/* Back button */}
         <TouchableOpacity
-          className="absolute top-12 left-4 bg-white rounded-full p-2 shadow-md"
           onPress={() => router.back()}
+          className="absolute top-14 left-4 bg-white/90 p-2.5 rounded-2xl"
+          style={{ elevation: 3 }}
         >
-          <Ionicons name="arrow-back" size={24} color="black" />
+          <Ionicons name="arrow-back" size={20} color="#14532d" />
         </TouchableOpacity>
-      </View>
 
-      {/* Tab Switch */}
-      <View className="flex-row self-center bg-gray-100 rounded-full p-1 mt-2">
-        <TouchableOpacity
-          onPress={() => setActiveTab("details")}
-          className={`px-6 py-2 rounded-full ${activeTab === "details" ? "bg-green-700" : ""}`}
-        >
-          <Text className={`font-semibold text-sm ${activeTab === "details" ? "text-white" : "text-gray-500"}`}>Details</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setActiveTab("reviews")}
-          className={`px-6 py-2 rounded-full ${activeTab === "reviews" ? "bg-green-700" : ""}`}
-        >
-          <Text className={`font-semibold text-sm ${activeTab === "reviews" ? "text-white" : "text-gray-500"}`}>Reviews</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Details / Reviews */}
-      {activeTab === "details" && (
-        <View className="p-4">
-          <Text className="text-2xl font-bold">{product.name}</Text>
-          <Text className="text-gray-500 mt-1">{product.farmName}</Text>
-          <Text className="text-green-700 font-bold text-xl mt-2">{product.price}</Text>
-          <Text className="text-gray-400 mt-1">{product.stock} available</Text>
-          <Text className="mt-3 text-gray-600">{product.description}</Text>
+        {/* Stock badge */}
+        <View className="absolute bottom-3 right-3 bg-white/90 px-3 py-1.5 rounded-full flex-row items-center gap-1"
+          style={{ elevation: 2 }}>
+          <View className={`w-2 h-2 rounded-full ${product.stock > 5 ? "bg-green-500" : "bg-orange-400"}`} />
+          <Text className="text-xs font-bold text-gray-700">
+            {product.stock} {product.unit} left
+          </Text>
         </View>
+      </View>
+
+      {/* ── TAB BAR ── */}
+      <View className="flex-row self-center bg-gray-100 rounded-2xl p-1 mt-3 mx-4">
+        {(["details", "reviews"] as const).map((tab) => (
+          <TouchableOpacity
+            key={tab}
+            onPress={() => setActiveTab(tab)}
+            className={`px-8 py-2 rounded-xl ${activeTab === tab ? "bg-green-700" : ""}`}
+          >
+            <Text className={`font-semibold text-sm capitalize ${activeTab === tab ? "text-white" : "text-gray-500"}`}>
+              {tab}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* ── DETAILS TAB ── */}
+      {activeTab === "details" && (
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Name + Farm */}
+          <Text className="text-2xl font-black text-gray-900 leading-tight">
+            {product.name}
+          </Text>
+
+          <TouchableOpacity
+            onPress={() => router.push({ pathname: "/buyer/farm/[farmerId]", params: { farmerId: product.farmerId } })}
+            className="flex-row items-center mt-1.5 gap-1"
+          >
+            <Ionicons name="location-outline" size={13} color="#15803d" />
+            <Text className="text-green-700 font-semibold text-sm">{product.farmName}</Text>
+            <Ionicons name="chevron-forward" size={13} color="#15803d" />
+          </TouchableOpacity>
+
+          {/* Price + Rating row */}
+          <View className="flex-row items-center justify-between mt-4">
+            <Text className="text-green-700 font-black text-3xl">
+              ₱{Number(product.price).toFixed(2)}
+              <Text className="text-gray-400 text-sm font-normal"> / {product.unit}</Text>
+            </Text>
+            {avgRating > 0 && (
+              <View className="flex-row items-center bg-amber-50 px-3 py-1.5 rounded-full gap-1">
+                <Ionicons name="star" size={13} color="#f59e0b" />
+                <Text className="text-amber-600 font-bold text-sm">{avgRating.toFixed(1)}</Text>
+                <Text className="text-gray-400 text-xs">({MOCK_REVIEWS.length})</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Info chips */}
+          <View className="flex-row flex-wrap gap-2 mt-4">
+            <InfoChip icon="cube-outline" label={`${product.stock} ${product.unit} available`} />
+            {product.category && <InfoChip icon="pricetag-outline" label={product.category} />}
+            {product.freshness && <InfoChip icon="leaf-outline" label={`Fresh for ${product.freshness}`} color="green" />}
+          </View>
+
+          {/* Description */}
+          {product.description ? (
+            <View className="mt-5">
+              <Text className="text-gray-800 font-bold text-base mb-2">About this product</Text>
+              <Text className="text-gray-600 leading-6 text-sm">{product.description}</Text>
+            </View>
+          ) : null}
+        </ScrollView>
       )}
+
+      {/* ── REVIEWS TAB ── */}
       {activeTab === "reviews" && (
         <FlatList
-          data={reviews}
+          data={MOCK_REVIEWS}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: 16, paddingBottom: 200 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+          ListHeaderComponent={
+            <View className="flex-row items-center gap-2 mb-4 bg-green-50 rounded-2xl p-4">
+              <Text className="text-green-700 font-black text-4xl">{avgRating.toFixed(1)}</Text>
+              <View>
+                <View className="flex-row gap-0.5">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Ionicons
+                      key={s}
+                      name={s <= Math.round(avgRating) ? "star" : "star-outline"}
+                      size={16}
+                      color="#f59e0b"
+                    />
+                  ))}
+                </View>
+                <Text className="text-gray-500 text-xs mt-0.5">
+                  Based on {MOCK_REVIEWS.length} reviews
+                </Text>
+              </View>
+            </View>
+          }
           renderItem={({ item }) => (
-            <View className="bg-gray-100 rounded-xl p-4 mb-4">
-              <Text className="font-bold">{item.user}</Text>
-              <Text className="text-gray-400 text-sm">{item.date}</Text>
-              <Text className="text-yellow-500 mt-1">{"⭐".repeat(item.rating)}</Text>
-              <Text className="mt-2">{item.comment}</Text>
+            <View className="bg-gray-50 rounded-2xl p-4 mb-3">
+              <View className="flex-row justify-between items-start">
+                <View className="flex-row items-center gap-2">
+                  <View className="w-8 h-8 rounded-full bg-green-100 items-center justify-center">
+                    <Text className="text-green-700 font-bold text-xs">
+                      {item.user.charAt(0)}
+                    </Text>
+                  </View>
+                  <View>
+                    <Text className="font-bold text-gray-800 text-sm">{item.user}</Text>
+                    <Text className="text-gray-400 text-xs">{item.date}</Text>
+                  </View>
+                </View>
+                <View className="flex-row gap-0.5">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Ionicons
+                      key={s}
+                      name={s <= item.rating ? "star" : "star-outline"}
+                      size={12}
+                      color="#f59e0b"
+                    />
+                  ))}
+                </View>
+              </View>
+              <Text className="text-gray-600 text-sm mt-2.5 leading-5">{item.comment}</Text>
             </View>
           )}
         />
       )}
 
-      {/* Bottom action bar */}
-      <View className="absolute bottom-0 left-0 right-0 flex-row bg-white border-t border-gray-100 p-4 items-center">
-        <View className="flex-row items-center">
-          <TouchableOpacity className="items-center mr-5" onPress={() => Alert.alert("View shop profile")}>
-            <MaterialIcons name="storefront" size={24} color="#15803d" />
-            <Text className="text-xs mt-1 text-center">Shop</Text>
-          </TouchableOpacity>
-          <TouchableOpacity className="items-center" onPress={() => Alert.alert("Message farmer")}>
+      {/* ── BOTTOM ACTION BAR ── */}
+      <View
+        className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 py-4"
+        style={{ elevation: 12 }}
+      >
+        <View className="flex-row items-center gap-3">
+          {/* Message */}
+          <TouchableOpacity
+            onPress={() => {
+              if (!product.farmName || !product.farmerId) {
+                Alert.alert("Unavailable", "Farmer info not available.");
+                return;
+              }
+              router.push({
+                pathname: "/buyer/profile/ChatScreen",
+                params: { farmerName: product.farmName, farmerId: product.farmerId },
+              });
+            }}
+            className="bg-gray-100 p-3.5 rounded-2xl items-center justify-center"
+          >
             <AntDesign name="message" size={20} color="#15803d" />
-            <Text className="text-xs mt-1 text-center">Message</Text>
           </TouchableOpacity>
-        </View>
 
-        <View className="flex-row flex-1 ml-4 items-center">
+          {/* Add to Cart */}
           <TouchableOpacity
             onPress={() => openModal("cart")}
-            className="px-4 py-4 rounded-xl items-center justify-center bg-green-100"
+            className="bg-green-100 px-4 py-3.5 rounded-2xl items-center justify-center flex-row gap-2"
           >
-            <FontAwesome5 name="cart-plus" size={20} color="#16a34a" />
+            <Ionicons name="cart-outline" size={20} color="#15803d" />
+            <Text className="text-green-700 font-bold text-sm">Cart</Text>
           </TouchableOpacity>
 
+          {/* Buy Now */}
           <TouchableOpacity
             onPress={() => openModal("buynow")}
-            className="flex-1 bg-green-800 py-4 rounded-xl items-center justify-center ml-3"
+            className="flex-1 bg-green-700 py-3.5 rounded-2xl items-center justify-center"
+            style={{ elevation: 4, shadowColor: "#14532d", shadowOpacity: 0.25, shadowRadius: 8 }}
           >
-            <Text className="text-white font-bold text-center">Buy Now</Text>
+            <Text className="text-white font-black text-base">Buy Now</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Bottom Modal */}
+      {/* ── MODAL ── */}
       <Modal visible={modalVisible} transparent animationType="none" onRequestClose={closeModal}>
-        <Animated.View className="flex-1 bg-black/50" style={{ opacity: fadeAnim }}>
+        <Animated.View className="flex-1 bg-black/50 justify-end" style={{ opacity: fadeAnim }}>
           <TouchableOpacity className="flex-1" onPress={closeModal} />
         </Animated.View>
 
-        <Animated.View className="bg-white rounded-t-3xl p-6 absolute bottom-0 w-full" style={{ transform: [{ translateY: slideAnim }] }}>
-          <View className="w-16 h-1.5 bg-gray-300 rounded-full self-center mb-4" />
+        <Animated.View
+          className="bg-white rounded-t-[32px] px-6 pt-3 pb-10 absolute bottom-0 w-full"
+          style={{ transform: [{ translateY: slideAnim }] }}
+        >
+          {/* Handle */}
+          <View className="w-10 h-1 bg-gray-200 rounded-full self-center mb-5" />
 
-          <View className="flex-row items-center mb-4">
-            <Image source={{ uri: product.image }} className="w-24 h-24 rounded-xl mr-4" />
+          {/* Product row */}
+          <View className="flex-row gap-4 mb-5">
+            <View style={{ width: 88, height: 88, borderRadius: 16, overflow: "hidden", backgroundColor: "#f0fdf4" }}>
+              {product.image ? (
+                <Image
+                  source={{ uri: product.image }}
+                  style={{ width: "100%", height: "100%" }}
+                  contentFit="cover"
+                />
+              ) : (
+                <View className="flex-1 items-center justify-center">
+                  <Ionicons name="leaf-outline" size={28} color="#86efac" />
+                </View>
+              )}
+            </View>
             <View className="flex-1">
-              <Text className="font-bold text-lg">{product.name}</Text>
-              <Text className="text-green-700 font-bold mt-1">₱{product.price}</Text>
-              <Text className="text-gray-400 text-sm mt-1">Stock: {product.stock}</Text>
+              <Text className="font-black text-gray-900 text-base" numberOfLines={2}>{product.name}</Text>
+              <View className="flex-row items-center gap-1 mt-1">
+                <Ionicons name="location-outline" size={11} color="#15803d" />
+                <Text className="text-green-700 text-xs font-semibold">{product.farmName}</Text>
+              </View>
+              <Text className="text-green-700 font-black text-xl mt-1.5">
+                ₱{Number(product.price).toFixed(2)}
+                <Text className="text-gray-400 text-xs font-normal"> / {product.unit}</Text>
+              </Text>
+              <Text className="text-gray-400 text-xs mt-0.5">{product.stock} {product.unit} available</Text>
             </View>
           </View>
 
+          {/* Divider */}
+          <View className="h-px bg-gray-100 mb-4" />
+
+          {/* Quantity */}
           <View className="flex-row justify-between items-center mb-4">
-            <Text className="font-semibold">Quantity</Text>
-            <View className="flex-row items-center">
+            <Text className="text-gray-700 font-semibold">Quantity</Text>
+            <View className="flex-row items-center gap-4">
               <TouchableOpacity
-                onPress={() => setQuantity(Math.max(1, quantity - 1))}
-                className="w-10 h-10 bg-gray-100 rounded-lg justify-center items-center mr-2"
+                onPress={() => setQuantity((q) => Math.max(1, q - 1))}
+                className="bg-gray-100 w-10 h-10 rounded-2xl items-center justify-center"
               >
-                <Ionicons name="remove" size={20} color={quantity <= 1 ? "#ccc" : "#16a34a"} />
+                <Ionicons name="remove" size={18} color={quantity <= 1 ? "#d1d5db" : "#374151"} />
               </TouchableOpacity>
-              <Text className="text-lg font-bold">{quantity}</Text>
+              <Text className="font-black text-lg w-7 text-center text-gray-900">{quantity}</Text>
               <TouchableOpacity
-                onPress={() => setQuantity(Math.min(product.stock, quantity + 1))}
-                className="w-10 h-10 bg-gray-100 rounded-lg justify-center items-center ml-2"
+                onPress={() => setQuantity((q) => Math.min(product.stock, q + 1))}
+                className="bg-green-700 w-10 h-10 rounded-2xl items-center justify-center"
               >
-                <Ionicons name="add" size={20} color={quantity >= product.stock ? "#ccc" : "#16a34a"} />
+                <Ionicons name="add" size={18} color={quantity >= product.stock ? "#86efac" : "white"} />
               </TouchableOpacity>
             </View>
           </View>
 
-          <View className="flex-row justify-between items-center bg-gray-100 p-4 rounded-lg mb-4">
-            <Text className="font-semibold">Total Price</Text>
-            <Text className="text-green-700 font-bold text-lg">₱{Number(product.price.replace("₱","")) * quantity}</Text>
+          {/* Total */}
+          <View className="flex-row justify-between items-center bg-green-50 rounded-2xl px-4 py-3 mb-5">
+            <Text className="text-gray-500 font-medium">Total</Text>
+            <Text className="font-black text-green-700 text-xl">
+              ₱{(Number(product.price) * quantity).toFixed(2)}
+            </Text>
           </View>
 
-          <TouchableOpacity className="bg-green-700 py-4 rounded-xl items-center justify-center flex-row" onPress={handleConfirm}>
-            <Text className="text-white font-bold text-lg">{modalMode === "cart" ? "Add to Cart" : "Buy Now"}</Text>
+          {/* CTA */}
+          <TouchableOpacity
+            onPress={modalMode === "cart" ? handleAddToCart : handleBuyNow}
+            className="bg-green-700 py-4 rounded-2xl items-center justify-center flex-row gap-2"
+            style={{ elevation: 4, shadowColor: "#15803d", shadowOpacity: 0.3, shadowRadius: 8 }}
+            activeOpacity={0.85}
+          >
+            <Ionicons name={modalMode === "cart" ? "cart-outline" : "flash-outline"} size={20} color="white" />
+            <Text className="text-white font-black text-base">
+              {modalMode === "cart" ? "Add to Cart" : "Buy Now"}
+            </Text>
           </TouchableOpacity>
         </Animated.View>
       </Modal>
+    </View>
+  );
+}
+
+// ── HELPER COMPONENT ──
+function InfoChip({
+  icon,
+  label,
+  color = "gray",
+}: {
+  icon: string;
+  label: string;
+  color?: "gray" | "green";
+}) {
+  const isGreen = color === "green";
+  return (
+    <View className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-full ${isGreen ? "bg-green-50" : "bg-gray-100"}`}>
+      <Ionicons name={icon as any} size={12} color={isGreen ? "#15803d" : "#6b7280"} />
+      <Text className={`text-xs font-semibold ${isGreen ? "text-green-700" : "text-gray-600"}`}>{label}</Text>
     </View>
   );
 }

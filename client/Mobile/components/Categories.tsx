@@ -1,26 +1,68 @@
-import { Image, Text, View } from "react-native";
+import { ScrollView, Image, Text, TouchableOpacity, View } from "react-native";
+import { categories } from "@/constants/categories";
 
-const items = [
-  { name: "Eggs & Poultry", img: require("../assets/images/egg.jpg") },
-  { name: "Vegetables", img: require("../assets/images/vegetable.jpg") },
-  { name: "Fruits", img: require("../assets/images/fruits.jpg") },
-  { name: "Rice & Grains", img: require("../assets/images/rice.jpg") },
-];
+type Props = {
+  selectedCategory: string;
+  onSelectCategory: (category: string) => void;
+};
 
-export default function Categories() {
+export default function Categories({ selectedCategory, onSelectCategory }: Props) {
   return (
-    <View className="flex-row justify-between mx-6 mt-6">
-      {items.map((item, index) => (
-        <View key={index} className="items-center w-[22%]">
-          <View className="bg-white rounded-xl w-full items-center py-4">
-            <Image source={item.img} className="w-10 h-10" />
-          </View>
+    <View className="mt-5 mb-1">
+      <View className="flex-row justify-between items-center mx-4 mb-3">
+        <Text className="text-gray-800 font-bold text-lg">Categories</Text>
+      </View>
 
-          <Text className="mt-2 text-[12px] text-center mb-5">
-            {item.name}
-          </Text>
-        </View>
-      ))}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
+      >
+        {categories.map((item, index) => {
+          const active = selectedCategory === item.name;
+
+          return (
+            <TouchableOpacity
+              key={index}
+              activeOpacity={0.75}
+              onPress={() => onSelectCategory(item.name)}
+              className="items-center"
+              style={{ width: 68 }}
+            >
+              <View
+                className={`rounded-2xl items-center justify-center mb-1.5 ${
+                  active ? "bg-green-700" : "bg-white"
+                }`}
+                style={{
+                  width: 60,
+                  height: 60,
+                  elevation: active ? 6 : 2,
+                  shadowColor: active ? "#15803d" : "#000",
+                  shadowOpacity: active ? 0.25 : 0.06,
+                  shadowRadius: active ? 8 : 4,
+                  borderWidth: active ? 0 : 1,
+                  borderColor: "#e5e7eb",
+                }}
+              >
+                <Image source={item.img} style={{ width: 32, height: 32 }} resizeMode="contain" />
+              </View>
+
+              <Text
+                className={`text-[10px] text-center leading-tight font-semibold ${
+                  active ? "text-green-700" : "text-gray-500"
+                }`}
+                numberOfLines={2}
+              >
+                {item.name}
+              </Text>
+
+              {active && (
+                <View className="w-1.5 h-1.5 rounded-full bg-green-600 mt-1" />
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 }
