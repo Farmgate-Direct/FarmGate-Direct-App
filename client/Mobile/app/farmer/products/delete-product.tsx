@@ -17,6 +17,11 @@ type Props = {
   product?: ProductType | null;
 };
 
+// ================= ARCHIVE PRODUCT CONFIRMATION =================
+// Dating "Delete Product" - "Archive" na ito ngayon: hindi na tunay na
+// binubura ang produkto, image, o harvest/order history nito. Naka-hide
+// lang ito sa listing/homepage/FIFO selling, at puwede pa itong
+// ma-unarchive sa hinaharap kung kinakailangan.
 const DeleteProductModal = ({ visible, onCancel, onConfirm, loading, product }: Props) => {
   return (
     <Modal visible={visible} transparent animationType="fade">
@@ -24,8 +29,8 @@ const DeleteProductModal = ({ visible, onCancel, onConfirm, loading, product }: 
         <View className="bg-white rounded-2xl p-6 w-full">
 
           {/* TITLE */}
-          <Text className="text-center text-lg font-bold mb-2 text-red-600">
-            Delete Product
+          <Text className="text-center text-lg font-bold mb-2 text-orange-600">
+            Archive Product
           </Text>
 
           {/* PRODUCT NAME */}
@@ -35,11 +40,13 @@ const DeleteProductModal = ({ visible, onCancel, onConfirm, loading, product }: 
 
           {/* CONFIRM MESSAGE */}
           <Text className="text-center text-gray-500 mb-6">
-            Are you sure you want to delete{" "}
+            I-a-archive ang{" "}
             <Text className="font-bold text-gray-700">
               {product?.name}
             </Text>
-            ? This action cannot be undone.
+            . Hindi ito makikita sa iyong listing at sa mga buyer, pero
+            mananatili ang lahat ng datos nito (harvest history, orders,
+            reviews). Puwede mo pa itong ma-unarchive sa hinaharap.
           </Text>
 
           {/* BUTTONS */}
@@ -57,13 +64,13 @@ const DeleteProductModal = ({ visible, onCancel, onConfirm, loading, product }: 
             <TouchableOpacity
               onPress={onConfirm}
               disabled={loading}
-              className="w-[48%] bg-red-600 py-3 rounded-xl items-center"
+              className="w-[48%] bg-orange-600 py-3 rounded-xl items-center"
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text className="text-white font-bold">
-                  Delete
+                  Archive
                 </Text>
               )}
             </TouchableOpacity>

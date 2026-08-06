@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { ProductType } from "../../../src/types/product";
+import { ProductCategoryKey } from "../../../constants/productCatalog";
 
 type Props = {
   visible: boolean;
@@ -29,108 +30,94 @@ type DropdownProps = {
   onSelect: (value: string) => void;
 };
 
+const UNITS = ["per kg", "per pcs"];
+
+const Dropdown = ({ label, value, options, onSelect }: DropdownProps) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <View className="mb-4">
+      <Text className="text-xs text-gray-500 mb-1">{label}</Text>
+      <TouchableOpacity
+        onPress={() => setOpen(!open)}
+        className="bg-gray-100 px-4 py-3 rounded-xl border border-gray-300 flex-row justify-between items-center"
+      >
+        <Text>{value}</Text>
+        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={18} />
+      </TouchableOpacity>
+
+      {open && (
+        <View className="border border-gray-300 rounded-xl mt-1 overflow-hidden bg-white">
+          {options.map((opt) => (
+            <TouchableOpacity
+              key={opt}
+              onPress={() => {
+                onSelect(opt);
+                setOpen(false);
+              }}
+              className={`px-4 py-3 ${opt === value ? "bg-green-700" : "bg-white"}`}
+            >
+              <Text className={opt === value ? "text-white" : "text-black"}>{opt}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+};
+
+// ================= EDIT PRODUCT (MASTER INFO ONLY) =================
+// Ang name/category/unit/description/image ay shared sa LAHAT ng batch ng
+// produktong ito, kaya dito lang sila puwedeng baguhin. Ang price, stock,
+// status, at freshness ay per-batch na - i-edit sa "Batches" ng produkto
+// (tingnan ang edit-batch.tsx).
 const EditProductModal = ({ visible, onClose, product, onSave, loading }: Props) => {
   const [name, setName] = useState("");
-  const [category, setCategory] = useState("Vegetables");
-  const [price, setPrice] = useState("");
+  const [category, setCategory] = useState<ProductCategoryKey>("Vegetables");
   const [unit, setUnit] = useState("per kg");
-  const [stock, setStock] = useState("");
-  const [status, setStatus] = useState("Available");
-  const [freshness, setFreshness] = useState("1 day");
   const [description, setDescription] = useState("");
   const [image, setImage] = useState("");
   const [error, setError] = useState("");
 
-  // ================= OPTIONS =================
-  const categories = ["Fruits", "Egg & Poultry", "Vegetables", "Rice"];
-  const units = ["per kg", "per pcs"];
-  const statuses = ["Available", "Out of Stock",];
-  const freshnessOptions = [
-    "1 day",
-    "2 days",
-    "3 days",
-    "4 days",
-    "5 days",
-    "6 days",
-    "7 days",
-    "8 days",
-    "9 days",
-    "10 days",
-  ];
-
-  // ================= LOAD PRODUCT =================
   useEffect(() => {
     if (product) {
       setName(product.name || "");
-      setCategory(product.category || "Vegetables");
-      setPrice(product.price?.toString() || "");
+      setCategory((product.category as ProductCategoryKey) || "Vegetables");
       setUnit(product.unit || "per kg");
-      setStock(product.stock?.toString() || "");
-      setStatus(product.status || "Available");
-      setFreshness(product.freshness || "1 day");
       setDescription(product.description || "");
       setImage(product.image || "");
+      setError("");
     }
   }, [product]);
 
-  // ================= VALIDATION =================
   const isFormValid =
     name.trim() !== "" &&
     category.trim() !== "" &&
-    price !== "" &&
-    stock !== "" &&
     unit.trim() !== "" &&
-    status.trim() !== "" &&
     description.trim() !== "" &&
     image.trim() !== "";
 
-  // ================= IMAGE PICKER =================
   const pickImage = async () => {
-    const result =
-      await ImagePicker.launchImageLibraryAsync(
-        {
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          quality: 0.5,
-        }
-      );
-
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.5,
+    });
     if (!result.canceled && result.assets?.length > 0) {
       setImage(result.assets[0].uri || "");
     }
   };
-
-  // ================= INPUT VALIDATION =================
-  const handlePriceChange = (text: string) => {
-    if (/^\d*$/.test(text)) {
-      setPrice(text);
-    }
-  };
-
-  const handleStockChange = (text: string) => {
-    if (/^\d*$/.test(text)) {
-      setStock(text);
-    }
-  };
-
-  // ================= SAVE =================
 
   const handleSave = async () => {
     if (!isFormValid) {
       setError("Please fill in all fields.");
       return;
     }
-
     setError("");
 
     await onSave({
       ...product,
       name,
       category,
-      price: Number(price),
-      stock: Number(stock),
-      freshness,
       unit,
-      status,
       description,
       image,
     });
@@ -138,146 +125,46 @@ const EditProductModal = ({ visible, onClose, product, onSave, loading }: Props)
     onClose();
   };
 
-  // ================= DROPDOWN =================
-  const Dropdown = ({ label, value, options, onSelect, }: DropdownProps) => {
-    const [open, setOpen] = useState(false);
-    return (
-      <View className="mb-4">
-        <Text className="text-xs text-gray-500 mb-1">
-          {label}
-        </Text>
-
-        <TouchableOpacity
-          onPress={() => setOpen(!open)}
-          className="bg-gray-100 px-4 py-3 rounded-xl border border-gray-300 flex-row justify-between items-center"
-        >
-          <Text>{value}</Text>
-
-          <Ionicons
-            name={open ? "chevron-up" : "chevron-down"}
-            size={18}
-          />
-        </TouchableOpacity>
-
-        {open && (
-          <View className="border border-gray-300 rounded-xl mt-1 overflow-hidden bg-white">
-
-            {options.map((opt) => (
-              <TouchableOpacity
-                key={opt}
-                onPress={() => {
-                  onSelect(opt);
-                  setOpen(false);
-                }}
-                className={`px-4 py-3 ${opt === value ? "bg-green-700" : "bg-white"}`}
-              >
-                <Text
-                  className={opt === value ? "text-white" : "text-black"}
-                >
-                  {opt}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-      </View>
-    );
-  };
-
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-    >
+    <Modal visible={visible} transparent animationType="fade">
       <View className="flex-1 bg-black/40 justify-center px-6">
         <View className="bg-white rounded-3xl p-6 max-h-[90%]">
           <ScrollView showsVerticalScrollIndicator={false}>
-
-            <Text className="text-lg font-bold mb-4">
-              Edit Product
+            <Text className="text-lg font-bold mb-1">Edit Product</Text>
+            <Text className="text-xs text-gray-400 mb-4">
+              Naka-lock ang Product Name at Category (identity ng listing na
+              ito). Ang unit/description/image ay shared sa lahat ng batch.
+              Para sa presyo, stock, status, o freshness ng bawat batch,
+              buksan ang "Batches" ng produkto sa listing.
             </Text>
 
-            {error ? (
-              <Text className="text-red-500 mb-3">
-                {error}
-              </Text>
-            ) : null}
+            {error ? <Text className="text-red-500 mb-3">{error}</Text> : null}
 
-            {/* PRODUCT NAME */}
-            <Text className="text-xs text-gray-500 mb-1">
-              PRODUCT NAME
-            </Text>
+            {/* CATEGORY - HINDI na na-eedit: ang name+category ang
+                identity ng listing na ito, kaya kung babaguhin ito
+                puwedeng masira ang pagtugma sa mga existing na batch. */}
+            <View className="mb-4">
+              <Text className="text-xs text-gray-500 mb-1">CATEGORY</Text>
+              <View className="bg-gray-100 px-4 py-3 rounded-xl border border-gray-200 flex-row items-center justify-between">
+                <Text className="text-gray-500">{category}</Text>
+                <Ionicons name="lock-closed" size={14} color="#9ca3af" />
+              </View>
+            </View>
 
-            <TextInput
-              value={name}
-              onChangeText={setName}
-              placeholder="Enter product name"
-              className="bg-gray-100 px-4 py-3 rounded-xl mb-4 border border-gray-300"
-            />
-
-            {/* CATEGORY */}
-            <Dropdown
-              label="CATEGORY"
-              value={category}
-              options={categories}
-              onSelect={setCategory}
-            />
+            {/* PRODUCT NAME - HINDI rin na-eedit, parehong dahilan */}
+            <View className="mb-4">
+              <Text className="text-xs text-gray-500 mb-1">PRODUCT NAME</Text>
+              <View className="bg-gray-100 px-4 py-3 rounded-xl border border-gray-200 flex-row items-center justify-between">
+                <Text className="text-gray-500">{name}</Text>
+                <Ionicons name="lock-closed" size={14} color="#9ca3af" />
+              </View>
+            </View>
 
             {/* UNIT */}
-            <Dropdown
-              label="UNIT"
-              value={unit}
-              options={units}
-              onSelect={setUnit}
-            />
-
-            {/* PRICE */}
-            <Text className="text-xs text-gray-500 mb-1">
-              PRICE (₱)
-            </Text>
-
-            <TextInput
-              value={price}
-              onChangeText={handlePriceChange}
-              keyboardType="numeric"
-              placeholder="Enter price"
-              className="bg-gray-100 px-4 py-3 rounded-xl mb-4 border border-gray-300"
-            />
-
-            {/* STOCK */}
-            <Text className="text-xs text-gray-500 mb-1">
-              STOCK
-            </Text>
-            <TextInput
-              value={stock}
-              onChangeText={handleStockChange}
-              keyboardType="numeric"
-              placeholder="Enter stock"
-              className="bg-gray-100 px-4 py-3 rounded-xl mb-4 border border-gray-300"
-            />
-
-            {/* STATUS */}
-            <Dropdown
-              label="STATUS"
-              value={status}
-              options={statuses}
-              onSelect={setStatus}
-            />
-
-            {/* FRESHNESS */}
-            <Dropdown
-              label="FRESHNESS"
-              value={freshness}
-              options={freshnessOptions}
-              onSelect={setFreshness}
-            />
+            <Dropdown label="UNIT" value={unit} options={UNITS} onSelect={setUnit} />
 
             {/* DESCRIPTION */}
-            <Text className="text-xs text-gray-500 mb-1">
-              DESCRIPTION
-            </Text>
-
+            <Text className="text-xs text-gray-500 mb-1">DESCRIPTION</Text>
             <TextInput
               value={description}
               onChangeText={setDescription}
@@ -287,47 +174,38 @@ const EditProductModal = ({ visible, onClose, product, onSave, loading }: Props)
             />
 
             {/* IMAGE */}
-            <Text className="text-xs text-gray-500 mb-1">
-              IMAGE
-            </Text>
-
+            <Text className="text-xs text-gray-500 mb-1">IMAGE</Text>
             <TouchableOpacity
               onPress={pickImage}
               className="bg-gray-100 p-4 rounded-xl items-center mb-6 border border-gray-300"
             >
               {image ? (
-                <Image source={{ uri: image, }} className="w-24 h-24 rounded-lg"
-                />
+                <Image source={{ uri: image }} className="w-24 h-24 rounded-lg" />
               ) : (
-                <Text className="text-gray-500">
-                  Select Image
-                </Text>
+                <Text className="text-gray-500">Select Image</Text>
               )}
             </TouchableOpacity>
 
             {/* BUTTONS */}
             <View className="flex-row justify-between">
-
               <TouchableOpacity
                 onPress={onClose}
                 className="w-[48%] border border-green-700 py-3 rounded-xl items-center"
               >
-                <Text className="text-green-700 font-semibold">
-                  Cancel
-                </Text>
+                <Text className="text-green-700 font-semibold">Cancel</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={handleSave}
                 disabled={!isFormValid || loading}
-                className={`w-[48%] py-3 rounded-xl items-center ${isFormValid && !loading ? "bg-green-700" : "bg-gray-400"}`}
+                className={`w-[48%] py-3 rounded-xl items-center ${
+                  isFormValid && !loading ? "bg-green-700" : "bg-gray-400"
+                }`}
               >
                 {loading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text className="text-white font-bold">
-                    Save
-                  </Text>
+                  <Text className="text-white font-bold">Save</Text>
                 )}
               </TouchableOpacity>
             </View>

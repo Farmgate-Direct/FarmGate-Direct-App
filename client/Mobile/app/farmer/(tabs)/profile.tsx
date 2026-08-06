@@ -69,7 +69,7 @@ const Profile = () => {
 
     try {
 
-      setLoading(true);
+      //setLoading(true);
 
       const storedUser =
         await AsyncStorage.getItem(

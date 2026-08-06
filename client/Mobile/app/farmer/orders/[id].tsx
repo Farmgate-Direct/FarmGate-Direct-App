@@ -18,11 +18,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
+/*
 import {
   addProductSales,
 } from "@/src/services/productService";
-
+*/
 import {
   getOrderById,
   updateOrderStatus,
@@ -84,7 +84,7 @@ export default function OrderDetails() {
       setLoading(true);
 
       // Update sales only once
-      if (
+      /*if (
         status === "delivered" &&
         order.status !== "delivered"
       ) {
@@ -111,7 +111,7 @@ export default function OrderDetails() {
           );
         }
       }
-
+*/
       await updateOrderStatus(
         order.id,
         status
@@ -127,6 +127,9 @@ export default function OrderDetails() {
       console.log(
         "STATUS CHANGE ERROR:",
         error
+      );
+      console.log(
+        status
       );
 
       Alert.alert(

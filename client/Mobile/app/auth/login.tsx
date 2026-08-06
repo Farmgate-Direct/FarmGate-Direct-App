@@ -68,7 +68,7 @@ const Login = () => {
         JSON.stringify(userData)
       );
 
-      console.log("LOGIN SUCCESS:", userData);
+      
 
       // ROLE ROUTE
       if (userData.role === "farmer") {

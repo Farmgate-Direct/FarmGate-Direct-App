@@ -16,6 +16,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 
 import { createOrder } from "@/src/services/orderService";
 import { removeCartItem } from "@/src/services/cartService";
+import { recordSale } from "@/src/services/productService";
 
 import {
   collection,
@@ -135,6 +136,15 @@ export default function Checkout() {
   const total = subTotal + deliveryFee;
 
   // ================= PLACE ORDER =================
+  // Bago i-create ang order, tinatawag muna ang recordSale() para sa
+  // BAWAT product - ito ang nagbabawas ng stock gamit ang FIFO (pinaka-
+  // matandang batch/harvest record muna), at nagbabalik ng
+  // "contributions" (batchId + harvestRecordId + quantity) na dapat
+  // maka-store sa order para may traceability (item 7-8 ng spec).
+  // NOTE: hindi na dapat ginagamit ang batchId na naka-store sa cart
+  // item, dahil pwedeng nagbago na ang "current" FIFO batch (naubos na,
+  // nasa bagong linggo na, atbp) - laging kukunin ng recordSale() ang
+  // pinaka-totoong FIFO batch sa oras mismo ng pag-order.
   const placeOrder = async () => {
     if (!buyerId) return Alert.alert("Error", "Buyer not found");
     if (!address) return Alert.alert("Error", "No address selected");
@@ -153,20 +163,41 @@ export default function Checkout() {
           0
         );
 
+        // I-bawas ang stock (FIFO) para sa bawat product BAGO i-save ang
+        // order, at kunin ang batch/harvest traceability info.
+        const productsWithTrace = await Promise.all(
+          farm.products.map(async (p: any) => {
+            const { contributions } = await recordSale(
+              p.productId,
+              Number(p.quantity)
+            );
+            const primary = contributions[0] || null;
+
+            return {
+              productId: p.productId,
+              batchId: primary?.batchId ?? null,
+              batchNumber: primary?.batchNumber ?? null,
+              harvestRecordId: primary?.harvestRecordId ?? null,
+              // Buong breakdown kung sakaling mula sa higit sa isang
+              // batch/harvest record ang quantity na na-order (ex.
+              // naubos ang isang batch sa gitna ng pag-order).
+              contributions,
+              name: p.name,
+              image: p.image,
+              price: Number(p.price),
+              quantity: Number(p.quantity),
+              unit: p.unit,
+            };
+          })
+        );
+
         await createOrder({
           buyerId: buyerId as string,
           buyerName: buyerName || "",
           farmerId: farm.farmerId,
           farmName: farm.farmName,
 
-          products: farm.products.map((p: any) => ({
-            productId: p.productId,
-            name: p.name,
-            image: p.image,
-            price: Number(p.price),
-            quantity: Number(p.quantity),
-            unit: p.unit,
-          })),
+          products: productsWithTrace,
 
           delivery,
           payment,
@@ -360,11 +391,16 @@ export default function Checkout() {
       <View className="bg-white p-4">
         <TouchableOpacity
           onPress={placeOrder}
+          disabled={loading}
           className="bg-green-700 p-4 rounded-xl"
         >
-          <Text className="text-white text-center font-bold">
-            Place Order
-          </Text>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text className="text-white text-center font-bold">
+              Place Order
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
 
