@@ -88,7 +88,7 @@ const RegisterBuyer = () => {
         email,
         phone,
         role: "buyer",
-        status: "approved",
+        status: "pending",
         validID: validIDUrl,
         createdAt: new Date(),
       });

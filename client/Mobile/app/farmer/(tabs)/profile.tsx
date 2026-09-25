@@ -6,14 +6,8 @@ import {
 } from "@expo/vector-icons";
 
 import { useRouter } from "expo-router";
-
-import React, {
-  useEffect,
-  useState,
-} from "react";
-import {
-  useFocusEffect,
-} from "expo-router";
+import React, { useEffect, useState } from "react";
+import { useFocusEffect } from "expo-router";
 
 import {
   ActivityIndicator,
@@ -35,52 +29,31 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../../../FirebaseConfig";
-
 import { UserType } from "../../../src/types/user";
 
 const Profile = () => {
-
   const router = useRouter();
-
-  const [user, setUser] =
-    useState<UserType | null>(null);
-
-  const [productsCount, setProductsCount] =
-    useState(0);
-
-  const [ordersCount, setOrdersCount] =
-    useState(0);
-
-  const [farmerRating, setFarmerRating] =
-    useState(0);
-
-  const [loading, setLoading] =
-    useState(true);
+  const [user, setUser] = useState<UserType | null>(null);
+  const [productsCount, setProductsCount] = useState(0);
+  const [ordersCount, setOrdersCount] = useState(0);
+  const [farmerRating, setFarmerRating] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useFocusEffect(
     React.useCallback(() => {
-
       loadProfile();
-
     }, [])
   );
 
   const loadProfile = async () => {
-
     try {
 
       //setLoading(true);
-
-      const storedUser =
-        await AsyncStorage.getItem(
-          "user"
-        );
+      const storedUser = await AsyncStorage.getItem("user");
 
       if (!storedUser) return;
 
-      const parsedUser =
-        JSON.parse(storedUser);
-
+      const parsedUser = JSON.parse(storedUser);
       // ================= USER =================
       const userRef = doc(
         db,
@@ -88,14 +61,10 @@ const Profile = () => {
         parsedUser.uid
       );
 
-      const userSnap =
-        await getDoc(userRef);
+      const userSnap = await getDoc(userRef);
 
       if (userSnap.exists()) {
-
-        const userData =
-          userSnap.data() as UserType;
-
+        const userData = userSnap.data() as UserType;
         setUser(userData);
       }
 
@@ -109,12 +78,9 @@ const Profile = () => {
         )
       );
 
-      const productSnap =
-        await getDocs(productsQuery);
+      const productSnap = await getDocs(productsQuery);
 
-      setProductsCount(
-        productSnap.size
-      );
+      setProductsCount(productSnap.size);
 
       // ================= ORDERS =================
       const ordersQuery = query(
@@ -126,12 +92,9 @@ const Profile = () => {
         )
       );
 
-      const ordersSnap =
-        await getDocs(ordersQuery);
+      const ordersSnap = await getDocs(ordersQuery);
 
-      setOrdersCount(
-        ordersSnap.size
-      );
+      setOrdersCount(ordersSnap.size);
 
       // ================= FARMER RATINGS =================
       const ratingsQuery = query(
@@ -146,56 +109,37 @@ const Profile = () => {
         )
       );
 
-      const ratingsSnap =
-        await getDocs(ratingsQuery);
+      const ratingsSnap = await getDocs(ratingsQuery);
 
       if (!ratingsSnap.empty) {
 
         let total = 0;
 
         ratingsSnap.forEach((doc) => {
-
-          total +=
-            doc.data().rating || 0;
-
+          total += doc.data().rating || 0;
         });
 
-        const average =
-          total / ratingsSnap.size;
+        const average = total / ratingsSnap.size;
 
-        setFarmerRating(
-          Number(
-            average.toFixed(1)
-          )
-        );
+        setFarmerRating(Number(average.toFixed(1)));
       }
 
     } catch (error) {
-
-      console.log(
-        "PROFILE ERROR:",
-        error
-      );
-
+      console.log("PROFILE ERROR:", error);
     } finally {
-
       setLoading(false);
-
     }
   };
 
   // ================= LOADING =================
   if (loading) {
-
     return (
 
       <View className="flex-1 justify-center items-center bg-green-700">
-
         <ActivityIndicator
           size="large"
           color="#fff"
         />
-
       </View>
     );
   }
@@ -212,8 +156,7 @@ const Profile = () => {
           className="absolute right-8 top-16"
           onPress={() =>
             router.push({
-              pathname:
-                "/farmer/profile/qr",
+              pathname: "/farmer/profile/qr",
               params: {
                 uid: user?.uid,
               },
@@ -475,6 +418,39 @@ const Profile = () => {
 
           </TouchableOpacity>
 
+
+          <TouchableOpacity
+            onPress={() =>
+              router.push(
+                "/farmer/profile/balance"
+              )
+            }
+            className="bg-green-50 border mt-4 border-green-100 rounded-2xl p-4 flex-row items-center"
+          >
+            <View className="w-10 h-10 rounded-full bg-green-100 items-center justify-center">
+              <Ionicons
+                name="wallet-outline"
+                size={22}
+                color="#15803D"
+              />
+            </View>
+
+            <View className="flex-1 ml-3">
+              <Text className="font-bold text-gray-800">
+                Balance
+              </Text>
+
+              <Text className="text-gray-500 text-xs mt-1">
+                Manage wallet and deposits
+              </Text>
+            </View>
+
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color="#15803D"
+            />
+          </TouchableOpacity>
           {/* LOGOUT */}
           <TouchableOpacity
             activeOpacity={0.8}

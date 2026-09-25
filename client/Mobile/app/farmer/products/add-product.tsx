@@ -16,7 +16,6 @@ import { CreateProductInput, ProductType, BatchType } from "../../../src/types/p
 import {
   getFarmerProductNames,
   getActiveBatchForHarvest,
-  getLatestBatch,
 } from "../../../src/services/productService";
 import {
   CATEGORIES,
@@ -28,7 +27,12 @@ import {
 type Props = {
   visible: boolean;
   onClose: () => void;
-  onSave: (input: CreateProductInput, quantity: number, price: number) => Promise<void>;
+  onSave: (
+    input: CreateProductInput,
+    quantity: number,
+    price: number,
+    forceNewBatch: boolean
+  ) => Promise<void>;
   loading: boolean;
   farmerId: string;
   farmerName: string;
@@ -91,15 +95,16 @@ const Dropdown = ({ label, value, options, onSelect, placeholder }: DropdownProp
 
 // ================= ADD HARVEST =================
 // Bawat "Save" dito ay isang HARVEST EVENT, hindi bagong product listing.
-// Kapag EXISTING na ang product (matched sa dropdown), ang
-// unit/description/image ay MASTER-LEVEL na datos - hindi na sila
-// puwedeng baguhin dito (kahit magmukhang editable dati, hindi naman
-// na-a-apply ang bago dahil ginagamit lang talaga ang existing master
-// doc). Kaya read-only na lang sila ipinapakita rito; kung gusto ng
-// farmer na baguhin talaga ang mga yun, gamitin ang "Edit Product".
-// Ang PRICE ay per-batch, kaya laging editable, at pre-fill na ngayon
-// batay sa presyo ng aktibo (o pinakabagong) batch, para makita agad ng
-// farmer ang kasalukuyang presyo bago mag-update.
+//
+// Kapag may EXISTING na batch (currentBatch) para sa napiling product,
+// OPTIONAL na ngayon (farmer's choice) kung:
+//   - "Idagdag sa Batch N" (default) - dagdag lang ng stock sa
+//     kasalukuyang batch, WALANG epekto sa availability.
+//   - "Gumawa ng Bagong Batch" - awtomatikong magiging "Out of Stock"
+//     ang DATING batch (kahit may natitira pa itong stock), at ang
+//     BAGONG batch na lang ang lalabas/mabibili sa buyer side.
+// Walang automatic na "lumagpas na sa isang linggo" na trigger - laging
+// nasa farmer ang desisyon.
 const AddProductModal = ({
   visible,
   onClose,
@@ -119,14 +124,14 @@ const AddProductModal = ({
   const [image, setImage] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [activeBatch, setActiveBatch] = useState<BatchType | null>(null);
+  const [currentBatch, setCurrentBatch] = useState<BatchType | null>(null);
+  const [forceNewBatch, setForceNewBatch] = useState(false);
   const [matchedProduct, setMatchedProduct] = useState<ProductType | null>(null);
   // May value LANG ito kapag ang napiling pangalan+category ay tumutugma
   // sa isang NAKA-ARCHIVE nang product ng farmer na ito. Kapag meron,
   // dapat hindi makapag-save ang farmer - kailangan muna nilang
-  // i-unarchive ang lumang listing (sa Archived tab) bago sila
-  // makapag-dagdag ng bagong harvest, para hindi magkaroon ng duplicate
-  // na listing (ex. dalawang "Egg" - isa active, isa archived).
+  // i-unarchive ang lumang listing bago sila makapag-dagdag ng bagong
+  // harvest, para hindi magkaroon ng duplicate na listing.
   const [archivedDuplicate, setArchivedDuplicate] = useState<ProductType | null>(null);
 
   useEffect(() => {
@@ -145,18 +150,16 @@ const AddProductModal = ({
 
   // Kapag napili ang isang existing na product, i-lock ang
   // unit/description/image (galing sa master doc), at i-prefill ang
-  // price mula sa aktibo (o pinakabagong) batch nito. Tinitignan din
-  // kung may aktibong batch pa para sa notice (idagdag vs bagong batch).
-  //
-  // Kung ang natugma ay isang NAKA-ARCHIVE na product, ihinto agad dito
-  // - huwag nang autofill, at ipakita ang blocking notice sa halip.
+  // price mula sa current batch nito. Kung ang natugma ay isang
+  // NAKA-ARCHIVE na product, ihinto agad dito - blocking notice sa halip.
   useEffect(() => {
     const check = async () => {
       if (!name) {
         setNotice("");
-        setActiveBatch(null);
+        setCurrentBatch(null);
         setMatchedProduct(null);
         setArchivedDuplicate(null);
+        setForceNewBatch(false);
         return;
       }
       const target = normalizeProductName(name);
@@ -167,12 +170,13 @@ const AddProductModal = ({
       if (match?.archived) {
         setArchivedDuplicate(match);
         setMatchedProduct(null);
-        setActiveBatch(null);
+        setCurrentBatch(null);
         setNotice("");
         return;
       }
 
       setArchivedDuplicate(null);
+      setForceNewBatch(false);
 
       if (match) {
         setMatchedProduct(match);
@@ -180,29 +184,23 @@ const AddProductModal = ({
         setDescription(match.description);
         setImage(match.image);
 
+        // Pinakabagong batch, kahit anong petsa/linggo - dito nagmumula
+        // ang choice (idagdag dito vs gumawa ng bago).
         const batch = await getActiveBatchForHarvest(match.docId);
-        setActiveBatch(batch);
-
-        // Pre-fill ang price galing sa aktibong batch, o kung wala,
-        // sa pinakabagong batch (bilang magandang starting point) -
-        // pwede pa ring baguhin ito ng farmer bago i-save.
-        const referenceBatch = batch ?? (await getLatestBatch(match.docId));
-        if (referenceBatch) {
-          setPrice(referenceBatch.price.toString());
-        }
+        setCurrentBatch(batch);
 
         if (batch) {
-          const weekLabel = `${formatDate(batch.weekStart)}–${formatDate(batch.weekEnd)}`;
+          setPrice(batch.price.toString());
           setNotice(
-            `Idadagdag bilang bagong harvest record sa Batch ${String(batch.batchNumber).padStart(3, "0")} (${weekLabel}). Kasalukuyang stock: ${batch.stock} ${match.unit}.`
+            `Batch ${String(batch.batchNumber).padStart(3, "0")} (${formatDate(batch.weekStart)}) - ${batch.stock} ${match.unit} available, status: ${batch.status}. Piliin sa ibaba kung idadagdag dito o gagawa ng bagong batch.`
           );
         } else {
-          setNotice(`Bagong harvest week na - gagawa ng bagong Weekly Batch para dito.`);
+          setNotice("Unang harvest para sa produktong ito - gagawa ng unang batch.");
         }
       } else {
         setMatchedProduct(null);
         setNotice("");
-        setActiveBatch(null);
+        setCurrentBatch(null);
         // Bagong product - i-reset ang mga field para malinis magsimula
         setUnit("per kg");
         setDescription("");
@@ -215,6 +213,9 @@ const AddProductModal = ({
 
   const productNameOptions = PRODUCT_CATALOG[category] || [];
   const isExistingProduct = matchedProduct !== null;
+  // May choice lang kapag may existing na batch talaga - kung unang
+  // harvest pa lang (walang batch), awtomatiko na lang, walang choice.
+  const showBatchChoice = currentBatch !== null;
 
   const isFormValid =
     !archivedDuplicate &&
@@ -253,9 +254,10 @@ const AddProductModal = ({
     setDescription("");
     setImage("");
     setNotice("");
-    setActiveBatch(null);
+    setCurrentBatch(null);
     setMatchedProduct(null);
     setArchivedDuplicate(null);
+    setForceNewBatch(false);
   };
 
   const handleSave = async () => {
@@ -295,13 +297,10 @@ const AddProductModal = ({
     };
 
     try {
-      await onSave(input, Number(quantity), Number(price));
+      await onSave(input, Number(quantity), Number(price), forceNewBatch);
       resetForm();
       onClose();
     } catch (err: any) {
-      // Halimbawa: nasagip pa rin ng backend (addHarvest) ang archived
-      // duplicate check kahit paano - ipakita ang tunay na mensahe
-      // imbes na tahimik lang itong mabigo.
       setError(err?.message || "May error na naganap. Subukan muli.");
     }
   };
@@ -315,8 +314,7 @@ const AddProductModal = ({
 
             {error ? <Text className="text-red-500 mb-3">{error}</Text> : null}
 
-            {/* ARCHIVED DUPLICATE - blocking warning, hindi kasabay ng
-                normal na (green) notice sa ibaba */}
+            {/* ARCHIVED DUPLICATE - blocking warning */}
             {archivedDuplicate ? (
               <View className="bg-orange-50 border border-orange-300 rounded-xl px-4 py-3 mb-4">
                 <Text className="text-orange-700 text-xs font-semibold mb-1">
@@ -325,8 +323,7 @@ const AddProductModal = ({
                 <Text className="text-orange-700 text-xs">
                   Naka-archive na si "{archivedDuplicate.name}" ({archivedDuplicate.category}).
                   Pumunta sa "Archived" tab sa listing at i-unarchive muna ito bago ka
-                  makapag-dagdag ng bagong harvest - para hindi magkaroon ng duplicate na
-                  listing.
+                  makapag-dagdag ng bagong harvest.
                 </Text>
               </View>
             ) : notice ? (
@@ -352,6 +349,58 @@ const AddProductModal = ({
               placeholder="Select product"
             />
 
+            {/* BATCH CHOICE - lumalabas lang kapag may existing batch na
+                talaga. Walang automatic na week-based na pagpili - laging
+                nasa farmer ang desisyon. */}
+            {showBatchChoice && currentBatch && (
+              <View className="mb-4">
+                <Text className="text-xs text-gray-500 mb-2">
+                  ANO ANG GAGAWIN SA BAGONG ANI?
+                </Text>
+                <View className="flex-row gap-2">
+                  <TouchableOpacity
+                    onPress={() => setForceNewBatch(false)}
+                    className={`flex-1 px-3 py-3 rounded-xl border ${
+                      !forceNewBatch
+                        ? "bg-green-700 border-green-700"
+                        : "bg-white border-gray-300"
+                    }`}
+                  >
+                    <Text
+                      className={`text-xs font-semibold text-center ${
+                        !forceNewBatch ? "text-white" : "text-gray-700"
+                      }`}
+                    >
+                      Idagdag sa Batch {String(currentBatch.batchNumber).padStart(3, "0")}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setForceNewBatch(true)}
+                    className={`flex-1 px-3 py-3 rounded-xl border ${
+                      forceNewBatch
+                        ? "bg-green-700 border-green-700"
+                        : "bg-white border-gray-300"
+                    }`}
+                  >
+                    <Text
+                      className={`text-xs font-semibold text-center ${
+                        forceNewBatch ? "text-white" : "text-gray-700"
+                      }`}
+                    >
+                      Gumawa ng Bagong Batch
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                {forceNewBatch && (
+                  <Text className="text-orange-600 text-[10px] mt-2">
+                    Magiging "Out of Stock" ang Batch{" "}
+                    {String(currentBatch.batchNumber).padStart(3, "0")} (kahit may natitira pang
+                    stock) - ang bagong batch na lang ang makikita/mabibili ng buyer.
+                  </Text>
+                )}
+              </View>
+            )}
+
             {/* UNIT - editable lang kapag bagong product */}
             {isExistingProduct ? (
               <View className="mb-4">
@@ -364,7 +413,7 @@ const AddProductModal = ({
               <Dropdown label="UNIT" value={unit} options={UNITS} onSelect={setUnit} />
             )}
 
-            {/* PRICE - laging editable, naka-prefill na kung may batch */}
+            {/* PRICE - laging editable */}
             <Text className="text-xs text-gray-500 mb-1">PRICE (₱)</Text>
             <TextInput
               value={price}

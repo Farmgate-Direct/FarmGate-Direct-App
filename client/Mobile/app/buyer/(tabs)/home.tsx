@@ -1,241 +1,410 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   Image,
+  Keyboard,
+  ScrollView,
+  StatusBar,
   Text,
   TouchableOpacity,
   View,
-  StatusBar,
+  Dimensions,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useFocusEffect, useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import Categories from "@/components/Categories";
 import ProductCard from "@/components/ProductCard";
-import { images } from "@/constants/image";
+import Header_Buyer from "@/components/Header_Buyer";
+import Category_Buyer from "@/components/Category_Filter";
 import { ProductType } from "@/src/types/product";
+import { OrderType } from "@/src/types/order";
+
 import { subscribeToProducts } from "@/src/services/productService";
+import { getBuyerOrders } from "@/src/services/orderService";
+import { getSavedFarms } from "@/src/services/savedFarmService";
+import { getCartByBuyer } from "@/src/services/cartService";
+
+const TOP_SELLING_LIMIT = 10;
+
+type SavedFarm = {
+  id: string;
+  farmerId: string;
+  farmName: string;
+  coverPhoto?: string;
+  municipality?: string;
+  province?: string;
+};
 
 export default function Home() {
-  const [products, setProducts] = useState<ProductType[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState("All");
+  const router = useRouter();
 
-  useEffect(() => {
-    const unsubscribe = subscribeToProducts((data) => {
-      setProducts(data);
+  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState<ProductType[]>([]);
+  const [activeOrder, setActiveOrder] = useState<OrderType | null>(null);
+  const [savedFarms, setSavedFarms] = useState<SavedFarm[]>([]);
+  const [cartCount, setCartCount] = useState(0);
+
+  const [activeCategory, setActiveCategory] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const [bannerIdx, setBannerIdx] = useState(0);
+  const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+  const BANNERS = [
+    { id: "1", image: require("../../../assets/banners/banner1.jpg") },
+    { id: "2", image: require("../../../assets/banners/banner2.jpg") },
+    { id: "3", image: require("../../../assets/banners/banner3.jpg") },
+  ];
+
+  const loadHome = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      const userString = await AsyncStorage.getItem("user");
+      if (!userString) {
+        setLoading(false);
+        return;
+      }
+
+      const user = JSON.parse(userString);
+      const uid = user.uid || user.userId || user.id;
+
+      const [orders, farms, cartItems] = await Promise.all([
+        getBuyerOrders(uid),
+        getSavedFarms(uid) as Promise<SavedFarm[]>,
+        getCartByBuyer(uid),
+      ]);
+
+      const active =
+        orders.find((o) => o.status === "pending" || o.status === "processing") ||
+        null;
+      setActiveOrder(active);
+      setSavedFarms(farms);
+
+      const count = cartItems.reduce(
+        (sum: number, item: any) => sum + (item.quantity || 0),
+        0
+      );
+      setCartCount(count);
+    } catch (error) {
+      console.log("HOME LOAD ERROR:", error);
+    } finally {
       setLoading(false);
-    });
-    return () => unsubscribe();
+    }
   }, []);
 
-  const topCategory = useMemo(() => {
-    if (!products.length) return "Vegetables";
-    const counts: Record<string, number> = {};
-    products.forEach((item) => {
-      if (!item.category) return;
-      counts[item.category] = (counts[item.category] || 0) + 1;
-    });
-    return Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
-  }, [products]);
+  useFocusEffect(
+    useCallback(() => {
+      loadHome();
+    }, [loadHome])
+  );
 
-  const filteredProducts =
-    selectedCategory === "All"
+  useFocusEffect(
+    useCallback(() => {
+      const unsubscribe = subscribeToProducts((data) => setProducts(data));
+      return () => unsubscribe();
+    }, [])
+  );
+
+  const categoryFiltered =
+    activeCategory === "All"
       ? products
       : products.filter(
-          (item) =>
-            (item.category || "").trim().toLowerCase() ===
-            selectedCategory.trim().toLowerCase()
+          (p) =>
+            (p.category || "").trim().toLowerCase() ===
+            activeCategory.trim().toLowerCase()
         );
 
-  const bestSeller = useMemo(() => {
-    if (!products.length) return null;
-    return [...products].sort(
-      (a, b) => (b.weeklySales || 0) - (a.weeklySales || 0)
-    )[0];
-  }, [products]);
+  const resaleProducts: ProductType[] = [];
+
+  const topSelling = [...categoryFiltered]
+    .sort((a, b) => (b.totalSales || 0) - (a.totalSales || 0))
+    .slice(0, TOP_SELLING_LIMIT);
+
+  const searchResults =
+    searchQuery.trim().length === 0
+      ? []
+      : products
+          .filter(
+            (p) =>
+              p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+              (p.farmName || "").toLowerCase().includes(searchQuery.toLowerCase())
+          )
+          .slice(0, 6);
+
+  const closeSearch = () => {
+    setSearchQuery("");
+    Keyboard.dismiss();
+  };
+
+  const goToProduct = (id: string) => {
+    closeSearch();
+    router.push({ pathname: "/buyer/products/[id]", params: { id } });
+  };
+
+  const hasAnyContent =
+    !!activeOrder ||
+    resaleProducts.length > 0 ||
+    topSelling.length > 0 ||
+    savedFarms.length > 0;
 
   if (loading) {
     return (
       <View className="flex-1 justify-center items-center bg-white">
-        <ActivityIndicator size="large" color="#15803d" />
-        <Text className="mt-3 text-green-700 font-semibold text-sm">
-          Loading fresh produce…
+        <ActivityIndicator size="large" color="#14532d" />
+        <Text className="mt-3 text-green-900 font-semibold text-sm">
+          Loading your home…
         </Text>
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-[#f0fdf4]">
-      <StatusBar barStyle="light-content" backgroundColor="#14532d" />
-      <Image source={images.bg} className="absolute w-full h-full z-0" />
+    <View className="flex-1 bg-white">
+      <StatusBar barStyle="light-content" />
 
-      <FlatList
-        data={filteredProducts}
-        keyExtractor={(item, index) => item.docId || index.toString()}
-        numColumns={2}
+      <ScrollView
         showsVerticalScrollIndicator={false}
-        columnWrapperStyle={{
-          justifyContent: "space-between",
-          paddingHorizontal: 14,
-        }}
-        contentContainerStyle={{ paddingBottom: 80 }}
-        ListHeaderComponent={
-          <>
-            {/* ── HERO HEADER ── */}
-            <LinearGradient
-              colors={["#14532d", "#166534", "#15803d"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              className="rounded-b-[36px] pb-10 overflow-hidden"
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
+        <Header_Buyer
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+        />
+
+        {/* ── BANNER CAROUSEL ── */}
+        <View style={{ marginTop: 12, paddingHorizontal: 16 }}>
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(e) =>
+              setBannerIdx(Math.round(e.nativeEvent.contentOffset.x / (SCREEN_WIDTH - 32)))
+            }
+          >
+            {BANNERS.map((b) => (
+              <Image
+                key={b.id}
+                source={b.image}
+                style={{
+                  width: SCREEN_WIDTH - 32,
+                  height: 160,
+                  borderRadius: 10,
+                }}
+                resizeMode="cover"
+              />
+            ))}
+          </ScrollView>
+
+          <View style={{ flexDirection: "row", justifyContent: "center", gap: 5, marginTop: 8 }}>
+            {BANNERS.map((_, i) => (
+              <View
+                key={i}
+                style={{
+                  width: bannerIdx === i ? 18 : 5,
+                  height: 5,
+                  borderRadius: 10,
+                  backgroundColor: bannerIdx === i ? "#14532d" : "#d1d5db",
+                }}
+              />
+            ))}
+          </View>
+        </View>
+
+        <Category_Buyer activeCategory={activeCategory} onSelectCategory={setActiveCategory} />
+
+        <View className="px-4">
+          {/* ── ACTIVE ORDER ── */}
+          {activeOrder && (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() =>
+                router.push({
+                  pathname: "/buyer/profile/order-details",
+                  params: { orderId: activeOrder.id },
+                })
+              }
+              className="bg-amber-50 border border-amber-200 rounded-[10px] p-4 flex-row items-center mb-5"
+              style={{ elevation: 2 }}
             >
-              {/* Decorative circle accents */}
-              <View
-                className="absolute -top-10 -right-10 w-44 h-44 rounded-full opacity-10 bg-white"
-              />
-              <View
-                className="absolute top-16 -left-8 w-28 h-28 rounded-full opacity-10 bg-green-300"
-              />
-
-              {/* Notification */}
-              <TouchableOpacity
-                className="absolute right-5 top-14 bg-white/20 p-2 rounded-full"
-                activeOpacity={0.7}
-              >
-                <Ionicons name="notifications-outline" size={22} color="white" />
-              </TouchableOpacity>
-
-              {/* Logo + Brand */}
-              <View className="items-center mt-16 mb-1">
-                <View className="bg-white/15 rounded-2xl p-2 mb-3">
-                  <Image
-                    source={require("../../../assets/Farmgate-logos/farmgate-logo.png")}
-                    className="w-12 h-12"
-                  />
-                </View>
-                <Text className="text-white font-black text-2xl tracking-widest">
-                  FARMGATE DIRECT
-                </Text>
-                <Text className="text-green-200 text-xs font-medium mt-1 tracking-wide">
-                  Farm-to-Table · Hyperlocal
-                </Text>
+              <View className="bg-white w-10 h-10 rounded-[5px] items-center justify-center mr-3">
+                <MaterialCommunityIcons name="bike" size={20} color="#b45309" />
               </View>
-            </LinearGradient>
-
-            {/* ── TOP CATEGORY PILL ── */}
-            <View className="mx-4 -mt-5 z-10">
-              <View className="bg-white rounded-2xl px-5 py-3.5 flex-row items-center shadow-sm"
-                style={{ elevation: 4, shadowColor: "#14532d", shadowOpacity: 0.12, shadowRadius: 8 }}>
-                <View className="bg-green-100 rounded-xl p-2 mr-3">
-                  <Ionicons name="trending-up" size={18} color="#15803d" />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">
-                    Trending Category
-                  </Text>
-                  <Text className="text-green-800 font-bold text-base">
-                    {topCategory}
-                  </Text>
-                </View>
-                <View className="bg-green-50 px-3 py-1 rounded-full">
-                  <Text className="text-green-700 text-xs font-bold">
-                    #1 Pick
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* ── BEST SELLER CARD ── */}
-            {bestSeller && (
-              <View className="mx-4 mt-3">
-                <LinearGradient
-                  colors={["#b45309", "#d97706", "#f59e0b"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  className="rounded-3xl p-4 overflow-hidden"
-                  style={{ elevation: 5, shadowColor: "#b45309", shadowOpacity: 0.3, shadowRadius: 10 }}
+              <View className="flex-1">
+                <Text className="text-amber-700 text-[11px] font-bold">
+                  Order in progress
+                </Text>
+                <Text
+                  className="text-gray-800 font-semibold text-sm mt-0.5"
+                  numberOfLines={1}
                 >
-                  {/* Decorative blob */}
-                  <View className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-white/10" />
+                  {activeOrder.farmName} ·{" "}
+                  {activeOrder.status === "pending" ? "Waiting for farmer" : "Preparing"}
+                </Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={18} color="#9ca3af" />
+            </TouchableOpacity>
+          )}
 
-                  <View className="flex-row items-center">
-                    <View className="relative">
-                      {bestSeller.image ? (
+          {/* ── RESALE (conditional - hidden until defined) ── */}
+          {resaleProducts.length > 0 && (
+            <View className="mb-6">
+              <Text className="text-gray-800 font-bold text-base mb-3">
+                Resale products
+              </Text>
+              <FlatList
+                data={resaleProducts}
+                scrollEnabled={false}
+                numColumns={2}
+                keyExtractor={(item, index) => item.docId ?? index.toString()}
+                columnWrapperStyle={{ justifyContent: "space-between" }}
+                renderItem={({ item }) => <ProductCard item={item} />}
+              />
+            </View>
+          )}
+
+          {/* ── TOP SELLING PRODUCTS ── */}
+          {topSelling.length > 0 && (
+            <View className="mb-6">
+              <FlatList
+                data={topSelling}
+                scrollEnabled={false}
+                numColumns={2}
+                keyExtractor={(item, index) => item.docId ?? index.toString()}
+                columnWrapperStyle={{ justifyContent: "space-between" }}
+                renderItem={({ item }) => <ProductCard item={item} />}
+              />
+            </View>
+          )}
+
+          {/* ── SAVED FARMS ── */}
+          {savedFarms.length > 0 && (
+            <View className="mb-4">
+              <Text className="text-gray-800 font-bold text-base mb-3">
+                Your saved farms
+              </Text>
+              <FlatList
+                data={savedFarms}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyExtractor={(item, index) => item.id ?? index.toString()}
+                contentContainerStyle={{ gap: 10 }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    activeOpacity={0.88}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/buyer/farm/[farmerId]",
+                        params: { farmerId: item.farmerId },
+                      })
+                    }
+                    className="bg-white rounded-[10px] overflow-hidden border border-gray-100"
+                    style={{ width: 150 }}
+                  >
+                    <View
+                      className="bg-green-50 items-center justify-center overflow-hidden"
+                      style={{ height: 64 }}
+                    >
+                      {item.coverPhoto ? (
                         <Image
-                          source={{ uri: bestSeller.image }}
-                          className="w-[88px] h-[88px] rounded-2xl"
+                          source={{ uri: item.coverPhoto }}
+                          className="w-full h-full"
                           resizeMode="cover"
                         />
                       ) : (
-                        <View className="w-[88px] h-[88px] rounded-2xl bg-yellow-300/40" />
+                        <MaterialCommunityIcons name="home-outline" size={24} color="#86efac" />
                       )}
-                      <View className="absolute -top-2 -right-2 bg-white rounded-full px-1.5 py-0.5">
-                        <Text className="text-base">🏆</Text>
-                      </View>
                     </View>
-
-                    <View className="flex-1 ml-4">
-                      <Text className="text-white/80 text-[10px] font-bold uppercase tracking-widest mb-0.5">
-                        Best Seller This Week
-                      </Text>
+                    <View className="p-2.5">
                       <Text
-                        className="text-white font-black text-lg leading-tight"
+                        className="font-bold text-gray-900 text-[13px]"
                         numberOfLines={1}
                       >
-                        {bestSeller.name}
+                        {item.farmName}
                       </Text>
-                      <Text className="text-yellow-100 text-xs mt-0.5">
-                        {bestSeller.category}
+                      <Text className="text-gray-400 text-[10px] mt-0.5" numberOfLines={1}>
+                        {item.municipality}, {item.province}
                       </Text>
-
-                      <View className="flex-row items-center mt-2 gap-3">
-                        <View className="bg-white/20 rounded-xl px-3 py-1">
-                          <Text className="text-white font-black text-base">
-                            ₱{bestSeller.price}
-                          </Text>
-                        </View>
-                        <Text className="text-yellow-100 text-xs">
-                          {bestSeller.weeklySales || 0} sold
-                        </Text>
-                      </View>
                     </View>
-                  </View>
-                </LinearGradient>
-              </View>
-            )}
-
-            {/* ── CATEGORIES ── */}
-            <Categories
-              selectedCategory={selectedCategory}
-              onSelectCategory={setSelectedCategory}
-            />
-
-            {/* Section title */}
-            <View className="flex-row justify-between items-center mx-4 mb-3 mt-1">
-              <Text className="text-gray-800 font-bold text-lg">
-                {selectedCategory === "All" ? "All Products" : selectedCategory}
-              </Text>
-              <Text className="text-green-700 text-xs font-semibold">
-                {filteredProducts.length} items
-              </Text>
+                  </TouchableOpacity>
+                )}
+              />
             </View>
-          </>
-        }
-        ListEmptyComponent={
-          <View className="items-center py-16">
-            <Text className="text-4xl mb-3">🌱</Text>
-            <Text className="text-gray-500 font-semibold text-base">
-              No products found
-            </Text>
-            <Text className="text-gray-400 text-sm mt-1">
-              Try a different category
-            </Text>
+          )}
+
+          {/* ── FIRST-TIME / EMPTY STATE ── */}
+          {!hasAnyContent && (
+            <View className="items-center py-10">
+              <Text className="text-4xl mb-3">🌱</Text>
+              <Text className="text-gray-600 font-semibold text-base text-center">
+                Welcome to FarmGate Direct
+              </Text>
+              <Text className="text-gray-400 text-sm mt-1 text-center px-8">
+                Head to Shop to find fresh produce from local farms.
+              </Text>
+              <TouchableOpacity
+                onPress={() => router.push("/buyer/shop")}
+                className="bg-green-900 px-6 py-3 rounded-xl mt-5"
+              >
+                <Text className="text-white font-bold text-sm">Browse Shop</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </ScrollView>
+
+      {/* ── QUICK SEARCH DROPDOWN ── */}
+      {searchQuery.trim().length > 0 && (
+        <>
+          <TouchableOpacity
+            onPress={closeSearch}
+            activeOpacity={1}
+            className="absolute inset-0"
+            style={{ backgroundColor: "rgba(0,0,0,0.15)" }}
+          />
+          <View
+            className="absolute left-4 right-4 bg-white rounded-2xl overflow-hidden"
+            style={{
+              top: 118,
+              maxHeight: 280,
+              elevation: 8,
+              shadowColor: "#000",
+              shadowOpacity: 0.12,
+              shadowRadius: 10,
+            }}
+          >
+            {searchResults.length === 0 ? (
+              <View className="py-4 items-center">
+                <Text className="text-gray-400 text-xs">
+                  No results for "{searchQuery}"
+                </Text>
+              </View>
+            ) : (
+              <ScrollView keyboardShouldPersistTaps="handled">
+                {searchResults.map((item, idx) => (
+                  <TouchableOpacity
+                    key={item.docId}
+                    onPress={() => goToProduct(item.docId!)}
+                    activeOpacity={0.7}
+                    className={`px-4 py-3 ${
+                      idx < searchResults.length - 1 ? "border-b border-gray-100" : ""
+                    }`}
+                  >
+                    <Text className="text-gray-900 text-sm" numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <Text className="text-gray-400 text-[11px] mt-0.5" numberOfLines={1}>
+                      {item.farmName}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
           </View>
-        }
-        renderItem={({ item }) => <ProductCard item={item} />}
-      />
+        </>
+      )}
     </View>
   );
 }

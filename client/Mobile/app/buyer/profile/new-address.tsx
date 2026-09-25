@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -11,7 +11,6 @@ import React, {
 
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   Switch,
   Text,
@@ -20,12 +19,13 @@ import {
   View,
 } from "react-native";
 
-import { Dropdown }
-  from "react-native-element-dropdown";
+import { Dropdown } from "react-native-element-dropdown";
 
 import {
   addAddress,
 } from "@/src/services/addressService";
+
+import { useToast } from "../../../context/ToastContext";
 
 const PSGC_BASE =
   "https://psgc.gitlab.io/api";
@@ -35,10 +35,16 @@ const NewAddress = () => {
   const router =
     useRouter();
 
+  const { showToast } = useToast();
+
   const [loading, setLoading] =
     useState(false);
 
+  const [locationLoading, setLocationLoading] =
+    useState(true);
+
   // ================= USER INPUT =================
+
   const [fullName, setFullName] =
     useState("");
 
@@ -54,18 +60,7 @@ const NewAddress = () => {
   const [isDefault, setIsDefault] =
     useState(false);
 
-  // ================= DROPDOWNS =================
-  const [regions, setRegions] =
-    useState<any[]>([]);
-
-  const [provinces, setProvinces] =
-    useState<any[]>([]);
-
-  const [cities, setCities] =
-    useState<any[]>([]);
-
-  const [barangays, setBarangays] =
-    useState<any[]>([]);
+  // ================= FIXED LOCATION =================
 
   const [selectedRegion, setSelectedRegion] =
     useState<any>(null);
@@ -73,67 +68,158 @@ const NewAddress = () => {
   const [selectedProvince, setSelectedProvince] =
     useState<any>(null);
 
+  // ================= DROPDOWNS =================
+
+  const [cities, setCities] =
+    useState<any[]>([]);
+
+  const [barangays, setBarangays] =
+    useState<any[]>([]);
+
   const [selectedCity, setSelectedCity] =
     useState<any>(null);
 
   const [selectedBarangay, setSelectedBarangay] =
     useState<any>(null);
 
-  // ================= LOAD REGIONS =================
+  // ================= LOAD FIXED LOCATION =================
+
   useEffect(() => {
 
-    loadRegions();
+    loadFixedLocation();
 
   }, []);
 
-  const loadRegions =
+  // ================= FIND CENTRAL LUZON + BULACAN =================
+
+  const loadFixedLocation =
     async () => {
 
       try {
 
-        const response =
+        setLocationLoading(true);
+
+        // ==========================================
+        // STEP 1: GET ALL REGIONS
+        // ==========================================
+
+        const regionResponse =
           await fetch(
-            `${PSGC_BASE}/regions`
+            `${PSGC_BASE}/regions`);
+
+        if (!regionResponse.ok) {
+
+          throw new Error(
+            "Failed to fetch regions"
+          );
+        }
+
+        const regions =
+          await regionResponse.json();
+
+        // ==========================================
+        // FIND CENTRAL LUZON
+        // ==========================================
+
+        const centralLuzon =
+          regions.find(
+            (region: any) =>
+              region.name
+                ?.trim()
+                .toLowerCase() ===
+              "central luzon"
           );
 
-        const data =
-          await response.json();
+        if (!centralLuzon) {
 
-        setRegions(data);
+          throw new Error(
+            "Central Luzon not found"
+          );
+        }
+
+        setSelectedRegion(
+          centralLuzon
+        );
+
+        console.log(
+          "Central Luzon:",
+          centralLuzon
+        );
+
+        // ==========================================
+        // STEP 2: GET PROVINCES UNDER CENTRAL LUZON
+        // ==========================================
+
+        const provinceResponse =
+          await fetch(
+            `${PSGC_BASE}/regions/${centralLuzon.code}/provinces`
+          );
+
+        if (!provinceResponse.ok) {
+
+          throw new Error(
+            "Failed to fetch provinces"
+          );
+        }
+
+        const provinces =
+          await provinceResponse.json();
+
+        // ==========================================
+        // FIND BULACAN
+        // ==========================================
+
+        const bulacan =
+          provinces.find(
+            (province: any) =>
+              province.name
+                ?.trim()
+                .toLowerCase() ===
+              "bulacan"
+          );
+
+        if (!bulacan) {
+
+          throw new Error(
+            "Bulacan not found"
+          );
+        }
+
+        setSelectedProvince(
+          bulacan
+        );
+
+        console.log(
+          "Bulacan:",
+          bulacan
+        );
+
+        // ==========================================
+        // STEP 3: LOAD BULACAN CITIES
+        // ==========================================
+
+        await loadCities(
+          bulacan.code
+        );
 
       } catch (error) {
 
-        console.log(error);
+        console.log(
+          "Location loading error:",
+          error
+        );
 
-      }
-    };
+        showToast("Failed to load Bulacan locations. Please try again.");
 
-  // ================= LOAD PROVINCES =================
-  const loadProvinces =
-    async (
-      regionCode: string
-    ) => {
+      } finally {
 
-      try {
-
-        const response =
-          await fetch(
-            `${PSGC_BASE}/regions/${regionCode}/provinces`
-          );
-
-        const data =
-          await response.json();
-
-        setProvinces(data);
-
-      } catch (error) {
-
-        console.log(error);
+        setLocationLoading(false);
 
       }
     };
 
   // ================= LOAD CITIES =================
+
   const loadCities =
     async (
       provinceCode: string
@@ -146,6 +232,13 @@ const NewAddress = () => {
             `${PSGC_BASE}/provinces/${provinceCode}/cities-municipalities`
           );
 
+        if (!response.ok) {
+
+          throw new Error(
+            "Failed to fetch cities"
+          );
+        }
+
         const data =
           await response.json();
 
@@ -153,12 +246,17 @@ const NewAddress = () => {
 
       } catch (error) {
 
-        console.log(error);
+        console.log(
+          "City loading error:",
+          error
+        );
 
+        showToast("Failed to load cities/municipalities");
       }
     };
 
   // ================= LOAD BARANGAYS =================
+
   const loadBarangays =
     async (
       cityCode: string
@@ -171,6 +269,13 @@ const NewAddress = () => {
             `${PSGC_BASE}/cities-municipalities/${cityCode}/barangays`
           );
 
+        if (!response.ok) {
+
+          throw new Error(
+            "Failed to fetch barangays"
+          );
+        }
+
         const data =
           await response.json();
 
@@ -178,12 +283,17 @@ const NewAddress = () => {
 
       } catch (error) {
 
-        console.log(error);
+        console.log(
+          "Barangay loading error:",
+          error
+        );
 
+        showToast("Failed to load barangays");
       }
     };
 
   // ================= PHONE VALIDATION =================
+
   const validatePhone =
     (number: string) => {
 
@@ -194,42 +304,63 @@ const NewAddress = () => {
     };
 
   // ================= SUBMIT =================
+
   const handleSubmit =
     async () => {
 
       try {
 
+        // ==========================================
+        // VALIDATE LOCATION
+        // ==========================================
+
         if (
-          !fullName ||
-          !phone ||
           !selectedRegion ||
-          !selectedProvince ||
-          !selectedCity ||
-          !selectedBarangay ||
-          !street
+          !selectedProvince
         ) {
 
-          Alert.alert(
-            "Error",
-            "Please fill all fields"
-          );
+          showToast("Location is still loading. Please wait.");
 
           return;
         }
 
+        // ==========================================
+        // VALIDATE INPUT
+        // ==========================================
+
         if (
-          !validatePhone(phone)
+          !fullName.trim() ||
+          !phone.trim() ||
+          !selectedCity ||
+          !selectedBarangay ||
+          !street.trim()
         ) {
 
-          Alert.alert(
-            "Invalid Phone",
-            "Enter valid PH number"
-          );
+          showToast("Please fill all fields");
+
+          return;
+        }
+
+        // ==========================================
+        // VALIDATE PHONE
+        // ==========================================
+
+        if (
+          !validatePhone(
+            phone.trim()
+          )
+        ) {
+
+          showToast("Enter a valid Philippine mobile number.");
 
           return;
         }
 
         setLoading(true);
+
+        // ==========================================
+        // GET USER
+        // ==========================================
 
         const userStr =
           await AsyncStorage.getItem(
@@ -241,7 +372,16 @@ const NewAddress = () => {
             ? JSON.parse(userStr)
             : null;
 
-        if (!user) return;
+        if (!user) {
+
+          showToast("User session not found.");
+
+          return;
+        }
+
+        // ==========================================
+        // SAVE ADDRESS
+        // ==========================================
 
         await addAddress({
 
@@ -250,9 +390,15 @@ const NewAddress = () => {
             user.userId ||
             user.id,
 
-          fullName,
+          fullName:
+            fullName.trim(),
 
-          phone,
+          phone:
+            phone.trim(),
+
+          // ========================================
+          // AUTOMATICALLY FROM PSGC
+          // ========================================
 
           region:
             selectedRegion.name,
@@ -260,34 +406,37 @@ const NewAddress = () => {
           province:
             selectedProvince.name,
 
+          // ========================================
+          // USER SELECTED
+          // ========================================
+
           city:
             selectedCity.name,
 
           barangay:
             selectedBarangay.name,
 
-          postalCode,
+          postalCode:
+            postalCode.trim(),
 
-          street,
+          street:
+            street.trim(),
 
           isDefault,
+
         });
 
-        Alert.alert(
-          "Success",
-          "Address added"
-        );
-
         router.back();
+        showToast("Address added successfully.");
 
       } catch (error) {
 
-        console.log(error);
-
-        Alert.alert(
-          "Error",
-          "Failed to save address"
+        console.log(
+          "Save address error:",
+          error
         );
+
+        showToast("Failed to save address.");
 
       } finally {
 
@@ -296,12 +445,62 @@ const NewAddress = () => {
       }
     };
 
+  // ================= LOADING LOCATION =================
+
+  if (locationLoading) {
+
+    return (
+
+      <View className="flex-1 bg-white">
+
+        <View className="bg-green-900 pt-14 pb-4 px-5 rounded-b-2xl flex-row items-center">
+
+          <TouchableOpacity
+            onPress={() =>
+              router.back()
+            }
+          >
+
+            <MaterialCommunityIcons
+              name="arrow-left"
+              size={24}
+              color="white"
+            />
+
+          </TouchableOpacity>
+
+          <Text className="text-white font-bold text-lg ml-4">
+            New Address
+          </Text>
+
+        </View>
+
+        <View className="flex-1 justify-center items-center">
+
+          <ActivityIndicator
+            size="large"
+            color="#14532d"
+          />
+
+          <Text className="text-gray-500 mt-4">
+            Loading Bulacan locations...
+          </Text>
+
+        </View>
+
+      </View>
+    );
+  }
+
+  // ================= MAIN UI =================
+
   return (
 
-    <View className="flex-1 bg-green-700">
+    <View className="flex-1 bg-white">
 
-      {/* HEADER */}
-      <View className="px-6 pt-16 pb-5 flex-row items-center">
+      {/* ================= HEADER ================= */}
+
+      <View className="bg-green-900 pt-14 pb-4 px-5 rounded-b-2xl flex-row items-center">
 
         <TouchableOpacity
           onPress={() =>
@@ -309,209 +508,176 @@ const NewAddress = () => {
           }
         >
 
-          <Ionicons
-            name="arrow-back"
+          <MaterialCommunityIcons
+            name="arrow-left"
             size={24}
             color="white"
           />
 
         </TouchableOpacity>
 
-        <Text className="text-white text-2xl font-bold ml-5">
+        <Text className="text-white font-bold text-lg ml-4">
           New Address
         </Text>
 
       </View>
 
-      {/* BODY */}
+      {/* ================= BODY ================= */}
+
       <ScrollView
-        className="flex-1 bg-white rounded-t-[40px] px-6 pt-8"
+        className="flex-1"
+        contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
       >
 
-        {/* FULL NAME */}
-        <TextInput
-          placeholder="Full Name"
-          value={fullName}
-          onChangeText={setFullName}
-          className="bg-gray-100 rounded-xl px-4 py-4 mb-4"
-        />
+      {/* ================= FULL NAME ================= */}
+      <Text className="text-gray-500 text-xs mb-1 ml-1">Full Name</Text>
+      <TextInput
+        placeholder="Full Name"
+        value={fullName}
+        onChangeText={setFullName}
+        className="bg-gray-100 rounded-[5px] px-4 py-4 mb-4"
+      />
 
-        {/* PHONE */}
-        <TextInput
-          placeholder="09XXXXXXXXX"
-          value={phone}
-          onChangeText={setPhone}
-          keyboardType="phone-pad"
-          className="bg-gray-100 rounded-xl px-4 py-4 mb-4"
-        />
+      {/* ================= PHONE ================= */}
+      <Text className="text-gray-500 text-xs mb-1 ml-1">Phone Number</Text>
+      <TextInput
+        placeholder="09XXXXXXXXX"
+        value={phone}
+        onChangeText={setPhone}
+        keyboardType="phone-pad"
+        maxLength={13}
+        className="bg-gray-100 rounded-[5px] px-4 py-4 mb-4"
+      />
 
-        {/* REGION */}
-        <Dropdown
-          style={{
-            backgroundColor: "#F3F4F6",
-            borderRadius: 14,
-            paddingHorizontal: 16,
-            height: 58,
-            marginBottom: 16,
-          }}
-          data={regions}
-          labelField="name"
-          valueField="code"
-          placeholder="Select Region"
-          search
-          value={selectedRegion?.code}
-          onChange={(item) => {
+      {/* ================= REGION ================= */}
+      <Text className="text-gray-500 text-xs mb-1 ml-1">Region</Text>
+      <View className="bg-gray-100 rounded-[5px] px-4 py-4 mb-4">
+        <Text className="text-gray-800 text-base font-medium">
+          {selectedRegion?.name}
+        </Text>
+      </View>
 
-            setSelectedRegion(item);
+      {/* ================= PROVINCE ================= */}
+      <Text className="text-gray-500 text-xs mb-1 ml-1">Province</Text>
+      <View className="bg-gray-100 rounded-[5px] px-4 py-4 mb-4">
+        <Text className="text-gray-800 text-base font-medium">
+          {selectedProvince?.name}
+        </Text>
+      </View>
 
-            setSelectedProvince(null);
-            setSelectedCity(null);
-            setSelectedBarangay(null);
+      {/* ================= CITY / MUNICIPALITY ================= */}
+      <Text className="text-gray-500 text-xs mb-1 ml-1">City / Municipality</Text>
+      <Dropdown
+        style={{
+          backgroundColor: "#F3F4F6",
+          borderRadius: 5,
+          paddingHorizontal: 16,
+          height: 50,
+          marginBottom: 16,
+        }}
+        data={cities}
+        labelField="name"
+        valueField="code"
+        placeholder="Select City / Municipality"
+        search
+        searchPlaceholder="Search city or municipality..."
+        value={selectedCity?.code}
+        activeColor="#f0fdf4"
+        onChange={(item) => {
+          setSelectedCity(item);
+          setSelectedBarangay(null);
+          setBarangays([]);
+          setPostalCode(item.zipCode || item.zip_code || "");
+          loadBarangays(item.code);
+        }}
+      />
 
-            setProvinces([]);
-            setCities([]);
-            setBarangays([]);
+      {/* ================= BARANGAY ================= */}
+      <Text className="text-gray-500 text-xs mb-1 ml-1">Barangay</Text>
+      <Dropdown
+        disable={!selectedCity}
+        style={{
+          backgroundColor: "#F3F4F6",
+          borderRadius: 5,
+          paddingHorizontal: 16,
+          height: 50,
+          marginBottom: 16,
+          opacity: selectedCity ? 1 : 0.5,
+        }}
+        data={barangays}
+        labelField="name"
+        valueField="code"
+        placeholder="Select Barangay"
+        search
+        searchPlaceholder="Search barangay..."
+        value={selectedBarangay?.code}
+        activeColor="#f0fdf4"
+        onChange={(item) => {
+          setSelectedBarangay(item);
+        }}
+      />
 
-            loadProvinces(item.code);
-          }}
-        />
+      {/* ================= POSTAL CODE ================= */}
+      <Text className="text-gray-500 text-xs mb-1 ml-1">Postal Code</Text>
+      <TextInput
+        placeholder="Postal Code"
+        value={postalCode}
+        onChangeText={setPostalCode}
+        keyboardType="numeric"
+        maxLength={4}
+        className="bg-gray-100 rounded-[5px] px-4 py-4 mb-4"
+      />
 
-        {/* PROVINCE */}
-        <Dropdown
-          disable={!selectedRegion}
-          style={{
-            backgroundColor: "#F3F4F6",
-            borderRadius: 14,
-            paddingHorizontal: 16,
-            height: 58,
-            marginBottom: 16,
-            opacity:
-              selectedRegion
-                ? 1
-                : 0.5,
-          }}
-          data={provinces}
-          labelField="name"
-          valueField="code"
-          placeholder="Select Province"
-          search
-          value={selectedProvince?.code}
-          onChange={(item) => {
+      {/* ================= STREET ================= */}
+      <Text className="text-gray-500 text-xs mb-1 ml-1">House No. / Street</Text>
+      <TextInput
+        placeholder="House No. / Street"
+        value={street}
+        onChangeText={setStreet}
+        className="bg-gray-100 rounded-[5px] px-4 py-4 mb-6"
+      />
 
-            setSelectedProvince(item);
+        {/* ================= DEFAULT ================= */}
 
-            setSelectedCity(null);
-            setSelectedBarangay(null);
+        <View className="flex-row justify-between items-center mb-8 py-2 border-t border-gray-100 pt-6">
 
-            setCities([]);
-            setBarangays([]);
-
-            loadCities(item.code);
-          }}
-        />
-
-        {/* CITY */}
-        <Dropdown
-          disable={!selectedProvince}
-          style={{
-            backgroundColor: "#F3F4F6",
-            borderRadius: 14,
-            paddingHorizontal: 16,
-            height: 58,
-            marginBottom: 16,
-            opacity:
-              selectedProvince
-                ? 1
-                : 0.5,
-          }}
-          data={cities}
-          labelField="name"
-          valueField="code"
-          placeholder="Select City"
-          search
-          value={selectedCity?.code}
-          onChange={(item) => {
-
-            setSelectedCity(item);
-
-            setSelectedBarangay(null);
-
-            setPostalCode(
-              item.zipCode || ""
-            );
-
-            loadBarangays(item.code);
-          }}
-        />
-
-        {/* BARANGAY */}
-        <Dropdown
-          disable={!selectedCity}
-          style={{
-            backgroundColor: "#F3F4F6",
-            borderRadius: 14,
-            paddingHorizontal: 16,
-            height: 58,
-            marginBottom: 16,
-            opacity:
-              selectedCity
-                ? 1
-                : 0.5,
-          }}
-          data={barangays}
-          labelField="name"
-          valueField="code"
-          placeholder="Select Barangay"
-          search
-          value={selectedBarangay?.code}
-          onChange={(item) => {
-
-            setSelectedBarangay(item);
-          }}
-        />
-
-        {/* POSTAL */}
-        <TextInput
-          placeholder="Postal Code"
-          value={postalCode}
-          onChangeText={setPostalCode}
-          keyboardType="numeric"
-          className="bg-gray-100 rounded-xl px-4 py-4 mb-4"
-        />
-
-        {/* STREET */}
-        <TextInput
-          placeholder="House No. / Street"
-          value={street}
-          onChangeText={setStreet}
-          className="bg-gray-100 rounded-xl px-4 py-4 mb-6"
-        />
-
-        {/* DEFAULT */}
-        <View className="flex-row justify-between items-center mb-8">
-
-          <Text className="text-gray-700 font-medium">
+          <Text className="text-gray-700 font-medium text-sm">
             Set as Default
           </Text>
 
           <Switch
             value={isDefault}
-            onValueChange={setIsDefault}
+            onValueChange={
+              setIsDefault
+            }
             trackColor={{
               false: "#d1d5db",
-              true: "#15803D",
+              true: "#14532d",
             }}
+            thumbColor={
+              isDefault
+                ? "#ffffff"
+                : "#f4f4f5"
+            }
           />
 
         </View>
 
-        {/* BUTTON */}
+        {/* ================= SAVE ================= */}
+
         <TouchableOpacity
           activeOpacity={0.8}
           disabled={loading}
           onPress={handleSubmit}
-          className="bg-green-700 rounded-xl py-4 items-center mb-10"
+          className="rounded-[5px] py-4 items-center"
+          style={{
+            backgroundColor: loading ? "#9ca3af" : "#14532d",
+            elevation: loading ? 0 : 4,
+            shadowColor: "#14532d",
+            shadowOpacity: 0.25,
+            shadowRadius: 8,
+          }}
         >
 
           {loading ? (

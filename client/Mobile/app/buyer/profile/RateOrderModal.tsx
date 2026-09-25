@@ -12,6 +12,8 @@ import {
 import { addReview } from "@/src/services/productService";
 import { markProductReviewed } from "@/src/services/orderService";
 import { OrderProduct } from "@/src/types/order";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../../../FirebaseConfig";
 
 type Props = {
   visible: boolean;
@@ -20,6 +22,7 @@ type Props = {
   product: OrderProduct | null;
   buyerId: string;
   buyerName: string;
+  buyerProfileImage?: string; 
   // Tinatawag pagkatapos matagumpay na maisumite ang review, para ma-
   // update ng parent screen (orders.tsx) ang local state nito (itago
   // ang "Rate" button, markahan bilang reviewed) nang hindi na
@@ -40,6 +43,7 @@ const RateOrderModal = ({
   product,
   buyerId,
   buyerName,
+  buyerProfileImage,
   onSubmitted,
 }: Props) => {
   const [rating, setRating] = useState(5);
@@ -63,6 +67,14 @@ const RateOrderModal = ({
     setSubmitting(true);
 
     try {
+      let profileImage = buyerProfileImage || "";
+      if (!profileImage && buyerId) {
+        const buyerDoc = await getDoc(doc(db, "users", buyerId));
+        profileImage = buyerDoc.exists()
+          ? buyerDoc.data().profileImage || ""
+          : "";
+      }
+
       await addReview({
         productId: product.productId,
         batchId: product.batchId || "",
@@ -71,6 +83,7 @@ const RateOrderModal = ({
         orderId,
         buyerId,
         buyerName,
+        buyerProfileImage: profileImage,
         rating,
         comment: comment.trim(),
         createdAt: Date.now(),
@@ -92,9 +105,9 @@ const RateOrderModal = ({
   if (!product) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
       <View className="flex-1 bg-black/40 justify-center px-6">
-        <View className="bg-white rounded-3xl p-6">
+        <View className="bg-white rounded-[10px] p-6">
           <Text className="text-lg font-bold mb-1">Rate this product</Text>
           <Text className="text-xs text-gray-400 mb-4">{product.name}</Text>
 
@@ -114,40 +127,42 @@ const RateOrderModal = ({
           </View>
 
           {/* COMMENT */}
-          <Text className="text-xs text-gray-500 mb-1">YOUR REVIEW</Text>
+
           <TextInput
             value={comment}
             onChangeText={setComment}
             multiline
             placeholder="Kumusta ang produkto? (freshness, sukat, atbp.)"
-            className="bg-gray-100 px-4 py-3 rounded-xl mb-4 h-24 border border-gray-300"
+            className="bg-gray-100 px-4 py-3 rounded-[5px] mb-4 h-24 border border-gray-300"
           />
 
-          <View className="flex-row justify-between">
-            <TouchableOpacity
-              onPress={() => {
-                resetForm();
-                onClose();
-              }}
-              className="w-[48%] border border-green-700 py-3 rounded-xl items-center"
-            >
-              <Text className="text-green-700 font-semibold">Cancel</Text>
-            </TouchableOpacity>
+            <View className="flex-row justify-between">
+              <TouchableOpacity
+                onPress={() => {
+                    resetForm();
+                    onClose();
+                  }}
+                  className="w-[48%] py-3 rounded-[5px] items-center"
+                  style={{ borderWidth: 1, borderColor: "#14532d" }}
+                >
+                <Text style={{ color: "#14532d" }} className="font-semibold">
+                  Cancel
+                </Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={handleSubmit}
-              disabled={submitting}
-              className={`w-[48%] py-3 rounded-xl items-center ${
-                submitting ? "bg-gray-400" : "bg-green-700"
-              }`}
-            >
-              {submitting ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text className="text-white font-bold">Submit</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+                <TouchableOpacity
+                    onPress={handleSubmit}
+                    disabled={submitting}
+                    className="w-[48%] py-3 rounded-[5px] items-center"
+                    style={{ backgroundColor: submitting ? "#9ca3af" : "#14532d" }}
+                  >
+                  {submitting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text className="text-white font-bold">Submit</Text>
+                  )}
+                </TouchableOpacity>
+            </View>
         </View>
       </View>
     </Modal>

@@ -1,6 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
-import AntDesign from "@expo/vector-icons/AntDesign";
-
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CommonActions } from "@react-navigation/native";
 import { useRouter } from "expo-router";
@@ -115,166 +113,93 @@ const Profile = () => {
       <View className="flex-1 justify-center items-center bg-white">
         <ActivityIndicator
           size="large"
-          color="#15803D"
+          color="#14532d"
         />
       </View>
     );
   }
 
+  const MENU_ITEMS = [
+  { label: "My Account", icon: "account-outline", route: "/buyer/profile/account-setting" },
+  { label: "My Cart", icon: "cart-outline", route: "/buyer/(tabs)/cart" },
+  { label: "Address", icon: "map-marker-outline", route: "/buyer/profile/address" },
+  { label: "My Orders", icon: "format-list-bulleted", route: "/buyer/profile/orders" },
+  { label: "Saved Farms", icon: "heart-outline", route: "/buyer/profile/saved-farms" },
+  ];
+
   return (
-    <View className="flex-1 bg-green-700">
+    <View className="flex-1" style={{ backgroundColor: "#14532d" }}>
 
       {/* HEADER */}
-      <View className="h-44 justify-center px-6">
-
-        <Text className="text-white text-2xl font-bold text-center">
-          Profile
-        </Text>
-
-        <TouchableOpacity
-          className="absolute right-8 top-16"
-          onPress={() =>
-            router.push(
-              "/buyer/profile/message"
-            )
-          }
-        >
-
-          <AntDesign
-            name="message"
-            size={28}
-            color="white"
-          />
-
-        </TouchableOpacity>
-
+      <View className="h-32 justify-center px-6">
       </View>
 
       {/* WHITE CARD */}
-      <View className="flex-1 bg-white rounded-t-[40px] px-6 pt-24">
+      <View className="flex-1 bg-white rounded-t-[40px] px-6 pt-20">
 
         <View className="items-center mb-8">
 
-          <Text className="text-xl font-bold text-gray-800">
+          <Text className="text-lg font-bold text-gray-800 mt-1">
             {user?.fullName || "User"}
-          </Text>
-
-          <Text className="text-gray-400 text-sm mt-1">
-            {user?.email || ""}
           </Text>
 
         </View>
 
         {/* OPTIONS */}
-        <TouchableOpacity
-          className="w-full flex-row items-center justify-between bg-gray-100 p-4 rounded-xl mb-4"
-          onPress={() =>
-            router.push(
-              "/buyer/profile/account-setting"
-            )
-          }
-        >
+        <View>
+          {MENU_ITEMS.map((item, index) => (
+            <TouchableOpacity
+              key={item.label}
+              className={`w-full flex-row items-center justify-between py-4 ${
+                index < MENU_ITEMS.length - 1 ? "border-b border-gray-100" : ""
+              }`}
+              onPress={() => router.push(item.route as any)}
+            >
+              <View className="flex-row items-center gap-3">
+                <MaterialCommunityIcons
+                  name={item.icon as any}
+                  size={20}
+                  color="#14532d"
+                />
+                <Text className="text-gray-800 font-semibold text-sm">
+                  {item.label}
+                </Text>
+              </View>
 
-          <Text className="text-green-700 font-semibold">
-            My Account
-          </Text>
-
-          <Ionicons
-            name="person-outline"
-            size={20}
-            color="#15803d"
-          />
-
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="w-full flex-row items-center justify-between bg-gray-100 p-4 rounded-xl mb-4"
-          onPress={() =>
-            router.push(
-              "/buyer/profile/address"
-            )
-          }
-        >
-
-          <Text className="text-green-700 font-semibold">
-            Address
-          </Text>
-
-          <Ionicons
-            name="location-outline"
-            size={20}
-            color="#15803d"
-          />
-
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="w-full flex-row items-center justify-between bg-gray-100 p-4 rounded-xl mb-4"
-          onPress={() =>
-            router.push(
-              "/buyer/profile/orders"
-            )
-          }
-        >
-
-          <Text className="text-green-700 font-semibold">
-            My Orders
-          </Text>
-
-          <Ionicons
-            name="time-outline"
-            size={20}
-            color="#15803d"
-          />
-
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="w-full flex-row items-center justify-between bg-gray-100 p-4 rounded-xl mb-4"
-          onPress={() =>
-            router.push(
-              "/buyer/profile/saved-farms"
-            )
-          }
-        >
-
-          <Text className="text-green-700 font-semibold">
-            Saved Farms
-          </Text>
-
-          <Ionicons
-            name="heart-outline"
-            size={20}
-            color="#15803d"
-          />
-
-        </TouchableOpacity>
+              <MaterialCommunityIcons
+                name="chevron-right"
+                size={18}
+                color="#9ca3af"
+              />
+            </TouchableOpacity>
+          ))}
+        </View>
 
         {/* LOGOUT */}
         <TouchableOpacity
-          className="w-full flex-row items-center justify-between bg-red-50 p-4 rounded-xl mt-2"
+          className="w-full flex-row items-center justify-between py-4 border-t border-gray-100 mt-2"
           onPress={() =>
             setModalVisible(true)
           }
         >
 
-          <Text className="text-red-600 font-semibold">
-            Log out
-          </Text>
-
-          <Ionicons
-            name="log-out-outline"
-            size={20}
-            color="#dc2626"
-          />
+          <View className="flex-row items-center gap-3">
+            <MaterialCommunityIcons
+              name="logout"
+              size={20}
+              color="#dc2626"
+            />
+            <Text className="text-red-600 font-semibold text-sm">
+              Log out
+            </Text>
+          </View>
 
         </TouchableOpacity>
 
       </View>
 
       {/* PROFILE IMAGE */}
-      {/* PROFILE IMAGE */}
-      <View className="absolute top-28 self-center items-center">
+      <View className="absolute top-20 self-center items-center">
 
         <TouchableOpacity
           activeOpacity={0.9}
@@ -303,10 +228,10 @@ const Profile = () => {
 
             ) : (
 
-              <Ionicons
-                name="person"
+              <MaterialCommunityIcons
+                name="account"
                 size={60}
-                color="#15803D"
+                color="#14532d"
               />
 
             )}
@@ -322,7 +247,7 @@ const Profile = () => {
 
         <View className="absolute inset-0 justify-center items-center bg-black/40">
 
-          <View className="bg-white rounded-2xl p-6 w-80">
+          <View className="bg-white rounded-[5px] p-6 w-80">
 
             <Text className="text-gray-800 text-lg font-semibold mb-4">
               Are you sure you want to logout?
@@ -331,12 +256,11 @@ const Profile = () => {
             <View className="flex-row justify-between mt-4">
 
               <TouchableOpacity
-                className="bg-gray-200 px-4 py-2 rounded-2xl flex-1 mr-2 items-center"
+                className="bg-gray-200 px-4 py-2 rounded-[5px] flex-1 mr-2 items-center"
                 onPress={() =>
                   setModalVisible(false)
                 }
               >
-
                 <Text className="text-gray-700 font-semibold">
                   Cancel
                 </Text>
@@ -344,7 +268,8 @@ const Profile = () => {
               </TouchableOpacity>
 
               <TouchableOpacity
-                className="bg-red-600 px-4 py-2 rounded-2xl flex-1 ml-2 items-center"
+                className="px-4 py-2 rounded-[5px] flex-1 ml-2 items-center"
+                style={{ backgroundColor: "#dc2626" }}
                 onPress={handleLogout}
               >
                 <Text className="text-white font-semibold">

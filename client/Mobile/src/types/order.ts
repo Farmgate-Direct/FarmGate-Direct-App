@@ -1,13 +1,5 @@
-// src/types/order.ts
 import { SaleContribution } from "./product";
 
-// ================= ORDER PRODUCT LINE =================
-// Bawat product sa loob ng order ay may batchId/harvestRecordId
-// (traceability - item 7-8 ng Weekly Batch spec) - ito ang UNANG
-// contribution mula sa FIFO sale. Ang "contributions" ay ang BUONG
-// breakdown kung sakaling kailangan kumuha mula sa higit sa isang
-// batch/harvest record ang quantity na na-order (ex. naubos ang isang
-// batch sa gitna ng pag-order).
 export type OrderProduct = {
   productId: string;
   batchId: string | null;
@@ -32,21 +24,98 @@ export type OrderAddress = {
   phone: string;
 };
 
+export type OrderStatus =
+  | "pending"
+  | "accepted"
+  | "processing"
+  | "to_receive"
+  | "delivered"
+  | "cancelled";
+
+export type PaymentMethod =
+  | "gcash"
+  | "cod";
+
+export type PaymentStatus =
+  | "pending"
+  | "paid"
+  | "failed"
+  | "cancelled";
+
+export type FulfillmentStatus =
+  | "pending"
+  | "fulfilled"
+  | "stock_unavailable"
+  | "manual_review";
+
+export type CommissionStatus =
+  | "pending"
+  | "charged"
+  | "not_applicable";
+
 export type OrderType = {
   id?: string;
+  orderNumber?: string;
   buyerId: string;
   buyerName: string;
   farmerId: string;
   farmName: string;
   products: OrderProduct[];
   delivery: "pickup" | "delivery";
-  payment: "qr" | "cod";
-  address: OrderAddress;
+  payment: PaymentMethod;
+  address: OrderAddress | null;
   pickupDate?: string | null;
   pickupTime?: string | null;
   subTotal: number;
   deliveryFee: number;
   total: number;
-  status: string;
-  createdAt?: any; // Firestore serverTimestamp() sa pag-create
+  status: OrderStatus;
+
+  // ================= FARMER DECISION =================
+  farmerDecision?: "accepted" | "rejected";
+  farmerDecisionAt?: any;
+  rejectionReason?: string;
+
+  // ================= TIMESTAMPS =================
+  createdAt?: any;
+  processingAt?: any;
+  toReceiveAt?: any;
+  deliveredAt?: any;
+  cancelledAt?: any;
+  paidAt?: any;
+  updatedAt?: any;
+  inventoryFulfilledAt?: any;
+
+  // ================= CANCEL =================
+  cancelledBy?: "buyer" | "farmer";
+  cancelReason?: string;
+
+  // ================= COMMISSION =================
+  commissionRate?: number;
+  commissionAmount?: number;
+  commissionStatus?: CommissionStatus;
+  commissionChargedAt?: any;
+
+  // ================= PAYMENT =================
+  paymentStatus?: PaymentStatus;
+  xenditPaymentRequestId?: string;
+  xenditPaymentId?: string;
+  xenditReferenceId?: string;
+  xenditPaymentChannel?: string;
+  xenditPaymentStatus?: string;
+  paymentFailureCode?: string;
+  paymentFailureReason?: string;
+  paymentRequestCreatedAt?: any;
+
+  // ================= INVENTORY / FULFILLMENT =================
+  inventoryFulfilled?: boolean;
+  fulfillmentStatus?: FulfillmentStatus;
+  fulfillmentError?: string;
+  serverValidated?: boolean;
+  serverValidatedAt?: any;
+
+  // ================= XENDIT WEBHOOK =================
+  xenditWebhookEvent?: string;
+  xenditWebhookReceivedAt?: any;
 };
+

@@ -5,115 +5,101 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { ProductType } from "@/src/types/product";
 
+const IMG_HEIGHT = 140;
+
 type Props = {
   item: ProductType;
 };
 
-const isFreshProduct = (createdAt: number, freshness: string) => {
-  const days = parseInt(freshness);
-  return Date.now() - createdAt < days * 86400000;
-};
-
-const getStockColor = (stock: number) => {
-  if (stock <= 0) return { bg: "bg-red-50", text: "text-red-500", label: "Out of stock" };
-  if (stock <= 5) return { bg: "bg-orange-50", text: "text-orange-500", label: "Low stock" };
-  return { bg: "bg-green-50", text: "text-green-600", label: "In stock" };
-};
-
+// ================= PRODUCT CARD (shared) =================
+// Used by both Home (Top-selling, Resale) and Shop's browse grid - one
+// card design so both screens stay visually consistent.
+//
+// Layout structure follows the reference: image on top, info row below
+// split into a left column (name / farm / rating+sold) and a right
+// column (price + unit). No "Fresh" badge - see the note in Home.tsx
+// about why that was dropped app-wide.
+//
+// Tap-through only: opens Product Details, where quantity selection and
+// Add to Cart already live (see buyer/products/[id].tsx).
 export default function ProductCard({ item }: Props) {
   const router = useRouter();
-  const isFresh =
-    item.createdAt && item.freshness
-      ? isFreshProduct(item.createdAt, item.freshness)
-      : false;
 
-  const stockInfo = getStockColor(Number(item.stock) || 0);
+  const stock = item.stock || 0;
+  const outOfStock = stock <= 0;
+  const hasRating = (item.totalReviews || 0) > 0;
 
   return (
     <TouchableOpacity
       activeOpacity={0.88}
       onPress={() =>
-        router.push({
-          pathname: "/buyer/products/[id]",
-          params: { id: item.docId },
-        })
+        router.push({ pathname: "/buyer/products/[id]", params: { id: item.docId } })
       }
-      className="w-[48%] bg-white rounded-3xl mb-4 overflow-hidden"
-      style={{
-        elevation: 3,
-        shadowColor: "#14532d",
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 2 },
-      }}
+      className="w-[48%] bg-white rounded-2xl mb-3 overflow-hidden border border-gray-100"
     >
-      {/* IMAGE */}
-      <View className="relative">
+      <View style={{ height: IMG_HEIGHT }}>
         {item.image ? (
           <Image
             source={{ uri: item.image }}
-            className="w-full"
-            style={{ height: 130 }}
+            style={{ width: "100%", height: "100%" }}
             resizeMode="cover"
           />
         ) : (
-          <View
-            className="w-full bg-green-50 items-center justify-center"
-            style={{ height: 130 }}
-          >
-            <Ionicons name="leaf-outline" size={36} color="#86efac" />
+          <View className="flex-1 bg-green-50 items-center justify-center">
+            <Ionicons name="leaf-outline" size={30} color="#86efac" />
           </View>
         )}
 
-        {/* Badges row */}
-        <View className="absolute top-2 left-2 flex-col gap-1">
-          {isFresh && (
-            <View className="bg-green-500 px-2 py-0.5 rounded-full flex-row items-center gap-1">
-              <View className="w-1.5 h-1.5 rounded-full bg-white" />
-              <Text className="text-white text-[10px] font-bold">Fresh</Text>
-            </View>
-          )}
-          {Number(item.stock) <= 5 && Number(item.stock) > 0 && (
-            <View className="bg-orange-400 px-2 py-0.5 rounded-full">
-              <Text className="text-white text-[10px] font-bold">Low Stock</Text>
-            </View>
-          )}
-        </View>
+        {/* Out of stock reads as an image overlay rather than an extra
+            text row, so the info block below always has the same shape. */}
+        {outOfStock && (
+          <View
+            className="absolute inset-0 items-center justify-center"
+            style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
+          >
+            <Text className="text-white font-bold text-xs">Out of stock</Text>
+          </View>
+        )}
       </View>
 
-      {/* CONTENT */}
-      <View className="p-3">
-        {/* Name */}
-        <Text
-          className="font-bold text-gray-900 text-sm leading-snug"
-          numberOfLines={1}
-        >
-          {item.name}
-        </Text>
+      <View className="flex-row px-2.5 py-2" style={{ minHeight: 72 }}>
+        <View className="flex-1 pr-1.5">
+          <Text
+            className="text-gray-900 font-bold text-xs"
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {item.name}
+          </Text>
+          <Text
+            className="text-gray-400 text-[10px] mt-0.5"
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {item.farmName}
+          </Text>
 
-        {/* Farm */}
-        {item.farmName ? (
-          <View className="flex-row items-center mt-1 gap-1">
-            <Ionicons name="location-outline" size={10} color="#9ca3af" />
-            <Text className="text-[10px] text-gray-400 flex-1" numberOfLines={1}>
-              {item.farmName}
-            </Text>
+          {/* Fixed-height row so cards line up whether or not a product
+              has reviews yet. */}
+          <View style={{ height: 14, marginTop: 3 }} className="flex-row items-center">
+            {hasRating && (
+              <>
+                <Ionicons name="star" size={9} color="#f59e0b" />
+                <Text className="text-[9px] text-gray-600 font-semibold ml-0.5">
+                  {item.rating.toFixed(1)}
+                </Text>
+                <Text className="text-[9px] text-gray-300 mx-1">·</Text>
+              </>
+            )}
+            <Text className="text-[9px] text-gray-400">{item.totalSales || 0} sold</Text>
           </View>
-        ) : null}
+        </View>
 
-        {/* Divider */}
-        <View className="h-px bg-gray-100 my-2" />
-
-        {/* Price + Stock */}
-        <View className="flex-row items-center justify-between">
-          <Text className="font-black text-green-700 text-base">
+        <View className="items-end justify-start pt-0.5">
+          <Text className="text-green-900 font-black text-xs">
             ₱{Number(item.price).toFixed(2)}
           </Text>
-          <View className={`px-2 py-0.5 rounded-full ${stockInfo.bg}`}>
-            <Text className={`text-[9px] font-bold ${stockInfo.text}`}>
-              {item.stock}{" Stock /"} {item.unit}
-            </Text>
-          </View>
+          <Text className="text-gray-400 text-[9px] mt-0.5">/{item.unit}</Text>
         </View>
       </View>
     </TouchableOpacity>

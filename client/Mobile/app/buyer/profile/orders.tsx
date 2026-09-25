@@ -14,6 +14,7 @@ import React, {
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Text,
   TouchableOpacity,
   View,
@@ -23,16 +24,30 @@ import {
   Ionicons,
 } from "@expo/vector-icons";
 
-import { getBuyerOrders }
-  from "@/src/services/orderService";
+import {
+  doc,
+  getDoc,
+} from "firebase/firestore";
 
-import { OrderType }
-  from "@/src/types/order";
+import { db } from "../../../FirebaseConfig";
+
+import {
+  getBuyerOrders,
+} from "@/src/services/orderService";
+
+import {
+  OrderType,
+} from "@/src/types/order";
+
+// Dark green used across the app
+const DARK_GREEN = "#14532d";
 
 const filters = [
   "All",
   "pending",
+  "accepted",
   "processing",
+  "to_receive",
   "delivered",
   "cancelled",
 ];
@@ -51,6 +66,76 @@ export default function BuyerOrders() {
   const [activeFilter, setActiveFilter] =
     useState("All");
 
+  // Larawan ng bawat farm (keyed by farmerId) - ginagamit sa avatar
+  // circle sa halip na paulit-ulit na unang letra lang.
+  const [farmImages, setFarmImages] =
+    useState<Record<string, string>>({});
+
+  // ================= FORMAT DATE =================
+  const formatOrderDate = (
+    createdAt: any
+  ) => {
+
+    if (!createdAt) {
+      return "Date unavailable";
+    }
+
+    try {
+
+      let date: Date;
+
+      if (
+        typeof createdAt?.toDate ===
+        "function"
+      ) {
+
+        date =
+          createdAt.toDate();
+
+      } else if (
+        typeof createdAt?.seconds ===
+        "number"
+      ) {
+
+        date =
+          new Date(
+            createdAt.seconds *
+              1000
+          );
+
+      } else {
+
+        date =
+          new Date(createdAt);
+      }
+
+      if (
+        isNaN(
+          date.getTime()
+        )
+      ) {
+
+        return "Date unavailable";
+      }
+
+      return date.toLocaleString(
+        "en-PH",
+        {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        }
+      );
+
+    } catch {
+
+      return "Date unavailable";
+    }
+  };
+
   // ================= FETCH =================
   const fetchOrders =
     async () => {
@@ -66,15 +151,29 @@ export default function BuyerOrders() {
 
         const user =
           userStr
-            ? JSON.parse(userStr)
+            ? JSON.parse(
+                userStr
+              )
             : null;
 
-        if (!user) return;
+        if (!user) {
+
+          setOrders([]);
+
+          return;
+        }
 
         const buyerId =
           user.uid ||
           user.userId ||
           user.id;
+
+        if (!buyerId) {
+
+          setOrders([]);
+
+          return;
+        }
 
         const data =
           await getBuyerOrders(
@@ -83,9 +182,51 @@ export default function BuyerOrders() {
 
         setOrders(data);
 
+        // ================= FARM PROFILE IMAGES =================
+        // Kunin ang profile image ng bawat natatanging farmer sa
+        // listahan ng orders - ginagamit sa avatar circle sa halip
+        // na paulit-ulit na unang letra lang.
+        const uniqueFarmerIds =
+          Array.from(
+            new Set(
+              data
+                .map((o: any) => o.farmerId)
+                .filter(Boolean)
+            )
+          );
+
+        const imageEntries =
+          await Promise.all(
+            uniqueFarmerIds.map(
+              async (farmerId: any) => {
+                try {
+                  const farmerDoc =
+                    await getDoc(
+                      doc(db, "users", farmerId)
+                    );
+                  return [
+                    farmerId,
+                    farmerDoc.exists()
+                      ? farmerDoc.data().profileImage || ""
+                      : "",
+                  ] as const;
+                } catch {
+                  return [farmerId, ""] as const;
+                }
+              }
+            )
+          );
+
+        setFarmImages(
+          Object.fromEntries(imageEntries)
+        );
+
       } catch (error) {
 
-        console.log(error);
+        console.log(
+          "FETCH BUYER ORDERS ERROR:",
+          error
+        );
 
       } finally {
 
@@ -110,14 +251,50 @@ export default function BuyerOrders() {
 
   // ================= FILTER =================
   const filteredOrders =
-    activeFilter === "All"
+    activeFilter ===
+      "All"
       ? orders
       : orders.filter(
           (o) =>
-            o.status === activeFilter
+            o.status ===
+            activeFilter
         );
 
-  // ================= STATUS =================
+  // ================= REVIEW COUNT =================
+  const getUnreviewedCount = (
+    order: OrderType
+  ) => {
+
+    if (
+      order.status !==
+      "delivered"
+    ) {
+
+      return 0;
+    }
+
+    return (
+      order.products || []
+    ).filter(
+      (product) =>
+        !product.reviewed
+    ).length;
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "pending": return "Pending";
+      case "accepted": return "Accepted";
+      case "processing": return "Processing";
+      case "to_receive": return "To Receive";
+      case "delivered": return "Delivered";
+      case "cancelled": return "Cancelled";
+      case "All": return "All";
+      default: return status;
+    }
+  };
+
+  // ================= STATUS COLOR =================
   const getStatusColor = (
     status: string
   ) => {
@@ -127,15 +304,28 @@ export default function BuyerOrders() {
       case "pending":
         return {
           text: "#D97706",
-          border: "#FACC15",
           bg: "#FEF3C7",
+        };
+
+      case "accepted":
+        return {
+          text: "#1D4ED8",
+          border: "#60A5FA",
+          bg: "#DBEAFE",
         };
 
       case "processing":
         return {
-          text: "#166534",
-          border: "#15803D",
+          text: DARK_GREEN,
+          border: DARK_GREEN,
           bg: "#DCFCE7",
+        };
+
+      case "to_receive":
+        return {
+          text: "#7C3AED",
+          border: "#8B5CF6",
+          bg: "#EDE9FE",
         };
 
       case "delivered":
@@ -143,13 +333,6 @@ export default function BuyerOrders() {
           text: "#1D4ED8",
           border: "#2563EB",
           bg: "#DBEAFE",
-        };
-
-      case "cancelled":
-        return {
-          text: "#374151",
-          border: "#6B7280",
-          bg: "#E5E7EB",
         };
 
       default:
@@ -165,24 +348,26 @@ export default function BuyerOrders() {
   if (loading) {
 
     return (
-
       <View className="flex-1 justify-center items-center bg-white">
 
         <ActivityIndicator
           size="large"
-          color="#15803D"
+          color={DARK_GREEN}
         />
+
+        <Text className="text-green-900 mt-3 font-semibold">
+          Loading orders...
+        </Text>
 
       </View>
     );
   }
 
   return (
+    <View className="flex-1" style={{ backgroundColor: "#fafafa" }}>
 
-    <View className="flex-1 bg-green-700">
-
-      {/* HEADER */}
-      <View className="pt-16 px-5 pb-5 flex-row items-center">
+      {/* ================= HEADER ================= */}
+      <View className="bg-green-900 pt-14 pb-4 px-5 rounded-b-2xl flex-row items-center">
 
         <TouchableOpacity
           onPress={() =>
@@ -199,75 +384,99 @@ export default function BuyerOrders() {
 
         </TouchableOpacity>
 
-        <Text className="text-white text-3xl font-bold">
+        <Text className="text-white font-bold text-lg">
           My Orders
         </Text>
 
       </View>
 
-      {/* BODY */}
-      <View className="flex-1 bg-white rounded-t-[40px] p-5">
+      {/* ================= BODY ================= */}
+      <View className="flex-1 px-4">
 
-        {/* FILTERS */}
-        <View className="mb-4">
-
-          <FlatList
-            data={filters}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(item) => item}
-            contentContainerStyle={{
-              paddingRight: 20,
-            }}
-            renderItem={({ item }) => {
-
-              const isActive =
-                activeFilter === item;
-
-              return (
-
-                <TouchableOpacity
-                  onPress={() =>
-                    setActiveFilter(item)
-                  }
-                  className={`px-4 py-2 rounded-full mr-3 ${
-                    isActive
-                      ? "bg-green-700"
-                      : "bg-gray-200"
-                  }`}
-                >
-
-                  <Text
-                    className={`font-medium ${
-                      isActive
-                        ? "text-white"
-                        : "text-gray-700"
-                    }`}
-                  >
-                    {item}
-                  </Text>
-
-                </TouchableOpacity>
-              );
-            }}
-          />
-
-        </View>
-
-        {/* ORDER LIST */}
+        {/* ================= LIST (filters scroll away with it) ================= */}
         <FlatList
-          data={filteredOrders}
-          keyExtractor={(item) =>
-            item.id ||
-            Math.random().toString()
+          data={
+            filteredOrders
           }
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingTop: 10,
-            paddingBottom: 20,
-          }}
-          ListEmptyComponent={
 
+          keyExtractor={(
+            item,
+            index
+          ) =>
+            item.id ||
+            `order-${index}`
+          }
+
+          showsVerticalScrollIndicator={
+            false
+          }
+
+          contentContainerStyle={{
+            paddingBottom: 20,
+            flexGrow:
+              filteredOrders.length ===
+              0
+                ? 1
+                : 0,
+          }}
+
+          ListHeaderComponent={
+            <View className="mb-3 mt-4">
+
+              <FlatList
+                data={filters}
+                horizontal
+                showsHorizontalScrollIndicator={
+                  false
+                }
+                keyExtractor={(item) =>
+                  item
+                }
+                contentContainerStyle={{
+                  paddingRight: 20,
+                  gap: 8,
+                }}
+                renderItem={({
+                  item,
+                }) => {
+
+                  const isActive =
+                    activeFilter ===
+                    item;
+
+                  return (
+                    <TouchableOpacity
+                      onPress={() =>
+                        setActiveFilter(
+                          item
+                        )
+                      }
+                      className={`px-4 py-2 rounded-full ${
+                        isActive
+                          ? "bg-green-900"
+                          : "bg-gray-100"
+                      }`}
+                    >
+
+                      <Text
+                        className={`font-semibold text-xs capitalize ${
+                          isActive
+                            ? "text-white"
+                            : "text-gray-600"
+                        }`}
+                      >
+                        {getStatusLabel(item)}
+                      </Text>
+
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+
+            </View>
+          }
+
+          ListEmptyComponent={
             <View className="mt-24 items-center">
 
               <Ionicons
@@ -282,78 +491,119 @@ export default function BuyerOrders() {
 
             </View>
           }
-          renderItem={({ item }) => {
+
+          renderItem={({
+            item,
+          }) => {
 
             const statusColors =
               getStatusColor(
                 item.status
               );
 
-            return (
+            const unreviewedCount =
+              getUnreviewedCount(
+                item
+              );
 
+            const farmImage =
+              (item as any).farmerId
+                ? farmImages[(item as any).farmerId]
+                : "";
+
+            return (
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() =>
                   router.push({
                     pathname:
                       "/buyer/profile/order-details",
-
                     params: {
                       orderId:
-                        item.id,
+                        item.id ||
+                        "",
                     },
                   })
                 }
-                className="bg-green-50 p-4 rounded-3xl mb-4 border border-green-100"
+                className="bg-white p-4 rounded-[10px] mb-3 border border-gray-100"
               >
 
                 <View className="flex-row items-center">
 
-                  {/* ICON */}
-                  <View className="w-14 h-14 rounded-full bg-green-600 justify-center items-center mr-4">
+                  {/* ================= FARM PFP ================= */}
+                  <View className="w-14 h-14 rounded-full bg-green-900 justify-center items-center mr-4 overflow-hidden">
 
-                    <Text className="text-white font-bold text-lg">
-                      {item.farmName
-                        ?.charAt(0)
-                        ?.toUpperCase()}
-                    </Text>
+                    {farmImage ? (
+
+                      <Image
+                        source={{ uri: farmImage }}
+                        style={{ width: "100%", height: "100%" }}
+                        resizeMode="cover"
+                      />
+
+                    ) : (
+
+                      <Text className="text-white font-bold text-lg">
+
+                        {item.farmName
+                          ?.charAt(0)
+                          ?.toUpperCase() ||
+                          "F"}
+
+                      </Text>
+                    )}
 
                   </View>
 
-                  {/* INFO */}
+                  {/* ================= INFO ================= */}
                   <View className="flex-1">
 
-                    <Text className="font-bold text-base text-gray-800">
-                      {item.farmName}
+                    {/* FARM NAME */}
+                    <Text className="font-bold text-base text-gray-900">
+                      {item.farmName ||
+                        "Farm"}
                     </Text>
 
-                    <Text className="text-gray-500 text-sm mt-1">
-                      {item.products?.length || 0}
-                      {" "}
-                      item(s)
-                    </Text>
+                    {/* DATE */}
+                    <View className="flex-row items-center mt-1.5">
 
-                    <Text className="text-green-700 font-semibold text-sm mt-1">
+                      <Ionicons
+                        name="calendar-outline"
+                        size={13}
+                        color="#6B7280"
+                      />
+
+                      <Text className="text-gray-500 text-xs ml-1">
+                        {formatOrderDate(
+                          item.createdAt
+                        )}
+                      </Text>
+
+                    </View>
+
+                    {/* TOTAL */}
+                    <Text className="text-green-900 font-semibold text-sm mt-1.5">
                       ₱
-                      {item.total}
+                      {Number(
+                        item.total
+                      ).toFixed(2)}
                     </Text>
+
+                    {item.status === "accepted" &&
+                      item.payment === "gcash" &&
+                      item.paymentStatus !== "paid" && (
+                      <Text className="text-amber-600 text-xs font-semibold mt-1">
+                        Awaiting GCash payment
+                      </Text>
+                    )}
 
                   </View>
 
-                  {/* RIGHT */}
-                  <View className="items-end">
+                  {/* ================= RIGHT ================= */}
+                  <View className="items-end ml-2">
 
                     {/* STATUS */}
-                    <View
-                      style={{
-                        backgroundColor:
-                          statusColors.bg,
-
-                        borderColor:
-                          statusColors.border,
-                      }}
-                      className="border rounded-full px-3 py-1"
-                    >
+                    <View className="px-3 py-1">
 
                       <Text
                         style={{
@@ -362,17 +612,48 @@ export default function BuyerOrders() {
                         }}
                         className="font-bold text-[11px]"
                       >
-                        {item.status.toUpperCase()}
+                        {getStatusLabel(item.status)}
                       </Text>
 
                     </View>
 
-                    <Ionicons
-                      name="chevron-forward"
-                      size={20}
-                      color="#15803D"
-                      className="mt-3"
-                    />
+                    {/* RATE INDICATOR */}
+                    {item.status ===
+                      "delivered" && (
+
+                      <View className="mt-2">
+
+                        {unreviewedCount >
+                        0 ? (
+
+                          <View className="bg-amber-500 px-3 py-1.5 rounded-[5px] flex-row items-center">
+
+                            <Text className="text-white font-bold text-[10px]">
+                              Rate Now
+                            </Text>
+
+                          </View>
+
+                        ) : (
+
+                          <View className="px-3 py-1.5 rounded-[5px] flex-row items-center">
+
+                            <Ionicons
+                              name="checkmark-circle"
+                              size={15}
+                              color={DARK_GREEN}
+                            />
+
+                            <Text className="text-green-900 font-semibold text-xs ml-1">
+                              Reviewed
+                            </Text>
+
+                          </View>
+
+                        )}
+
+                      </View>
+                    )}
 
                   </View>
 

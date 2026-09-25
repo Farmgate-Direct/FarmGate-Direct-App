@@ -110,7 +110,7 @@ const BuyerMessages = () => {
             <TouchableOpacity
               onPress={() =>
                 router.push({
-                  pathname: "/buyer/profile/ChatScreen",
+                  pathname: "/buyer/messages/ChatScreen",
                   params: {
                     farmerId: item.otherUserData?.uid,
                     farmerName:

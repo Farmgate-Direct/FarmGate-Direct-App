@@ -1,20 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
-  Ionicons,
-} from "@expo/vector-icons";
-
-import {
-  useRouter,
-} from "expo-router";
-
-import React, {
-  useEffect,
-  useState,
-} from "react";
-
-import {
-  Alert,
   Image,
   Text,
   TouchableOpacity,
@@ -22,541 +10,408 @@ import {
   TextInput,
   Modal,
   ActivityIndicator,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
-
-import * as ImagePicker
-  from "expo-image-picker";
-
-import {
-  doc,
-  updateDoc,
-} from "firebase/firestore";
-
+import * as ImagePicker from "expo-image-picker";
+import { doc, updateDoc } from "firebase/firestore";
 import {
   updatePassword,
   EmailAuthProvider,
   reauthenticateWithCredential,
   getAuth,
 } from "firebase/auth";
-
-import { db }
-  from "../../../FirebaseConfig";
-
-import {
-  uploadProfileImageAsync,
-} from "@/src/services/cloudinaryProfileService";
-
-import {
-  deleteCloudinaryImage,
-} from "../../../src/services/deleteImageService";
+import { db } from "../../../FirebaseConfig";
+import { uploadProfileImageAsync } from "@/src/services/cloudinaryProfileService";
+import { deleteCloudinaryImage } from "../../../src/services/deleteImageService";
+import { useToast } from "../../../context/ToastContext";
 
 const AccountSetting = () => {
-
   const router = useRouter();
-
   const auth = getAuth();
+  const { showToast } = useToast();
 
-  const [user, setUser] =
-    useState<any>(null);
-
-  const [loading, setLoading] =
-    useState(false);
-
-  const [modalVisible, setModalVisible] =
-    useState(false);
-
-  const [currentPassword, setCurrentPassword] =
-    useState("");
-
-  const [newPassword, setNewPassword] =
-    useState("");
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
 
   // ================= LOAD USER =================
   useEffect(() => {
-
     const loadUser = async () => {
-
-      const userStr =
-        await AsyncStorage.getItem(
-          "user"
-        );
-
+      const userStr = await AsyncStorage.getItem("user");
       if (!userStr) return;
-
-      setUser(
-        JSON.parse(userStr)
-      );
+      setUser(JSON.parse(userStr));
     };
 
     loadUser();
-
   }, []);
 
   // ================= PICK IMAGE =================
-  const pickImage =
-    async () => {
+  const pickImage = async () => {
+    try {
+      const permission =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-      try {
-
-        const permission =
-          await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-        if (
-          permission.status !==
-          "granted"
-        ) {
-
-          Alert.alert(
-            "Permission needed",
-            "Please allow gallery access"
-          );
-
-          return;
-        }
-
-        const result =
-          await ImagePicker.launchImageLibraryAsync({
-            mediaTypes:
-              ImagePicker.MediaTypeOptions.Images,
-
-            allowsEditing: true,
-
-            aspect: [1, 1],
-
-            quality: 0.7,
-          });
-
-        if (
-          result.canceled
-        ) return;
-
-        setLoading(true);
-
-        // ================= UPLOAD NEW IMAGE =================
-        const uploaded =
-          await uploadProfileImageAsync(
-            result.assets[0].uri
-          );
-
-        const userId =
-          user.uid ||
-          user.userId ||
-          user.id;
-
-        // ================= DELETE OLD IMAGE =================
-        if (
-          user?.profileImagePublicId
-        ) {
-
-          await deleteCloudinaryImage(
-            user.profileImagePublicId
-          );
-
-        }
-
-        // ================= UPDATE FIRESTORE =================
-        await updateDoc(
-          doc(
-            db,
-            "users",
-            userId
-          ),
-          {
-            profileImage:
-              uploaded.imageUrl,
-
-            profileImagePublicId:
-              uploaded.publicId,
-          }
-        );
-
-        // ================= UPDATE LOCAL USER =================
-        const updatedUser = {
-
-          ...user,
-
-          profileImage:
-            uploaded.imageUrl,
-
-          profileImagePublicId:
-            uploaded.publicId,
-        };
-
-        // ================= UPDATE STORAGE =================
-        await AsyncStorage.setItem(
-          "user",
-          JSON.stringify(
-            updatedUser
-          )
-        );
-
-        setUser(updatedUser);
-
-        Alert.alert(
-          "Success",
-          "Profile updated"
-        );
-
-      } catch (error) {
-
-        console.log(error);
-
-        Alert.alert(
-          "Error",
-          "Failed to upload image"
-        );
-
-      } finally {
-
-        setLoading(false);
-
+      if (permission.status !== "granted") {
+        showToast("Please allow gallery access");
+        return;
       }
-    };
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+
+      if (result.canceled) return;
+
+      setLoading(true);
+
+      // ================= UPLOAD NEW IMAGE =================
+      const uploaded = await uploadProfileImageAsync(result.assets[0].uri);
+
+      const userId = user.uid || user.userId || user.id;
+
+      // ================= DELETE OLD IMAGE =================
+      if (user?.profileImagePublicId) {
+        await deleteCloudinaryImage(user.profileImagePublicId);
+      }
+
+      // ================= UPDATE FIRESTORE =================
+      await updateDoc(doc(db, "users", userId), {
+        profileImage: uploaded.imageUrl,
+        profileImagePublicId: uploaded.publicId,
+      });
+
+      // ================= UPDATE LOCAL USER =================
+      const updatedUser = {
+        ...user,
+        profileImage: uploaded.imageUrl,
+        profileImagePublicId: uploaded.publicId,
+      };
+
+      // ================= UPDATE STORAGE =================
+      await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
+
+      setUser(updatedUser);
+
+      showToast("Profile updated");
+    } catch (error) {
+      console.log(error);
+      showToast("Failed to upload image");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // ================= CHANGE PASSWORD =================
-  const handleChangePassword =
-    async () => {
-
-      try {
-
-        if (
-          !currentPassword ||
-          !newPassword
-        ) {
-
-          Alert.alert(
-            "Error",
-            "Fill all fields"
-          );
-
-          return;
-        }
-        if (
-          currentPassword ===
-          newPassword
-        ) {
-
-          Alert.alert(
-            "Same Password",
-            "New password must be different from current password."
-          );
-
-          return;
-        }
-
-        if (
-          newPassword.length < 6
-        ) {
-
-          Alert.alert(
-            "Error",
-            "Password must be at least 6 characters"
-          );
-
-          return;
-        }
-
-        const firebaseUser =
-          auth.currentUser;
-
-        if (!firebaseUser) {
-
-          Alert.alert(
-            "Error",
-            "User not found"
-          );
-
-          return;
-        }
-
-        const credential =
-          EmailAuthProvider.credential(
-            firebaseUser.email || "",
-            currentPassword
-          );
-
-        // ================= REAUTH =================
-        await reauthenticateWithCredential(
-          firebaseUser,
-          credential
-        );
-
-        // ================= UPDATE PASSWORD =================
-        await updatePassword(
-          firebaseUser,
-          newPassword
-        );
-
-        Alert.alert(
-          "Success",
-          "Password changed successfully"
-        );
-
-        setModalVisible(false);
-
-        setCurrentPassword("");
-
-        setNewPassword("");
-
-      } catch (error: any) {
-
-        console.log(error);
-
-        Alert.alert(
-          "Error",
-          error.message
-        );
+  const handleChangePassword = async () => {
+    try {
+      if (!currentPassword || !newPassword) {
+        showToast("Please fill all fields");
+        return;
       }
-    };
+      if (currentPassword === newPassword) {
+        showToast("New password must be different from current password.");
+        return;
+      }
+
+      if (newPassword.length < 6) {
+        showToast("Password must be at least 6 characters");
+        return;
+      }
+
+      const firebaseUser = auth.currentUser;
+
+      if (!firebaseUser) {
+        showToast("User not found");
+        return;
+      }
+
+      setSavingPassword(true);
+
+      const credential = EmailAuthProvider.credential(
+        firebaseUser.email || "",
+        currentPassword
+      );
+
+      // ================= REAUTH =================
+      await reauthenticateWithCredential(firebaseUser, credential);
+
+      // ================= UPDATE PASSWORD =================
+      await updatePassword(firebaseUser, newPassword);
+
+      closePasswordModal();
+      showToast("Password changed successfully");
+    } catch (error: any) {
+      console.log(error);
+      showToast(error.message || "Something went wrong. Please try again.");
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const closePasswordModal = () => {
+    setModalVisible(false);
+    setCurrentPassword("");
+    setNewPassword("");
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+  };
 
   return (
-    <View className="flex-1 bg-green-700">
-
+    <View className="flex-1 bg-white">
       {/* HEADER */}
-      <View className="bg-green-700 px-6 py-4 pt-16 flex-row items-center">
-
-        <TouchableOpacity
-          onPress={() =>
-            router.back()
-          }
-        >
-
-          <Ionicons
-            name="arrow-back"
-            size={24}
-            color="white"
-          />
-
+      <View className="bg-green-900 pt-14 pb-4 px-5 rounded-b-2xl flex-row items-center">
+        <TouchableOpacity onPress={() => router.back()}>
+          <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
         </TouchableOpacity>
 
-        <Text className="text-white text-2xl font-bold ml-5">
+        <Text className="text-white font-bold text-lg ml-4">
           Account Settings
         </Text>
-
       </View>
 
       {/* BODY */}
-      <View className="flex-1 bg-white rounded-t-[40px] px-6 pt-8">
-
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+      >
         {/* PROFILE IMAGE */}
         <View className="items-center mb-8">
-
           <TouchableOpacity
             onPress={pickImage}
             disabled={loading}
             className="relative"
+            activeOpacity={0.8}
           >
-
             {user?.profileImage ? (
-
               <Image
-                source={{
-                  uri:
-                    user.profileImage,
-                }}
-                className="w-32 h-32 rounded-full"
+                source={{ uri: user.profileImage }}
+                className="w-28 h-28 rounded-full"
               />
-
             ) : (
-
-              <View className="w-32 h-32 rounded-full bg-green-100 justify-center items-center">
-
-                <Ionicons
-                  name="person"
-                  size={60}
-                  color="#15803D"
-                />
-
+              <View
+                className="w-28 h-28 rounded-full justify-center items-center"
+                style={{ backgroundColor: "#f0fdf4" }}
+              >
+                <MaterialCommunityIcons name="account" size={54} color="#14532d" />
               </View>
+            )}
 
+            {/* LOADING OVERLAY */}
+            {loading && (
+              <View className="absolute inset-0 rounded-full bg-black/40 justify-center items-center">
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              </View>
             )}
 
             {/* CAMERA ICON */}
-            <View className="absolute bottom-0 right-0 bg-green-700 p-2 rounded-full">
-
-              <Ionicons
-                name="camera"
-                size={18}
-                color="white"
-              />
-
-            </View>
-
+            {!loading && (
+              <View
+                className="absolute bottom-0 right-0 p-2 rounded-full border-2 border-white"
+                style={{ backgroundColor: "#14532d" }}
+              >
+                <MaterialCommunityIcons name="camera" size={16} color="white" />
+              </View>
+            )}
           </TouchableOpacity>
 
-          <Text className="text-gray-500 mt-3">
-            Tap to change profile
+          <Text className="text-gray-400 text-xs mt-3">
+            Tap to change profile photo
           </Text>
-
-          {loading && (
-
-            <ActivityIndicator
-              size="large"
-              color="#15803D"
-              className="mt-4"
-            />
-
-          )}
-
         </View>
 
-        <Text className="text-gray-400 mb-6">
+        {/* SECTION LABEL */}
+        <Text className="text-gray-400 text-xs font-semibold uppercase mb-1 ml-1">
           Account
         </Text>
 
-        {/* FULL NAME */}
-        <View className="flex-row items-center justify-between bg-gray-100 p-4 rounded-xl mb-4">
+        <View className="mb-6">
+          {/* FULL NAME */}
+          <View className="flex-row items-center justify-between py-4 border-b border-gray-100">
+            <View className="flex-row items-center flex-1">
+              <MaterialCommunityIcons
+                name="account-circle-outline"
+                size={20}
+                color="#14532d"
+              />
+              <Text className="ml-3 text-gray-800 font-semibold text-sm">
+                Full Name
+              </Text>
+            </View>
 
-          <View className="flex-row items-center">
-
-            <Ionicons
-              name="person-circle-outline"
-              size={20}
-              color="#15803d"
-            />
-
-            <Text className="ml-3 text-green-700 font-semibold">
-              Full Name
+            <Text
+              className="text-gray-500 text-sm ml-3 flex-shrink"
+              numberOfLines={1}
+            >
+              {user?.fullName || "—"}
             </Text>
-
           </View>
 
-          <Text className="text-gray-400">
-            {user?.fullName || ""}
-          </Text>
+          {/* EMAIL */}
+          <View className="flex-row items-center justify-between py-4">
+            <View className="flex-row items-center flex-1">
+              <MaterialCommunityIcons
+                name="email-outline"
+                size={20}
+                color="#14532d"
+              />
+              <Text className="ml-3 text-gray-800 font-semibold text-sm">
+                Email
+              </Text>
+            </View>
 
+            <Text
+              className="text-gray-500 text-sm ml-3 flex-shrink"
+              numberOfLines={1}
+            >
+              {user?.email || "—"}
+            </Text>
+          </View>
         </View>
 
-        {/* EMAIL */}
-        <View className="flex-row items-center justify-between bg-gray-100 p-4 rounded-xl mb-4">
+        {/* SECTION LABEL */}
+        <Text className="text-gray-400 text-xs font-semibold uppercase mb-1 ml-1">
+          Security
+        </Text>
 
-          <View className="flex-row items-center">
+        <View>
+          {/* CHANGE PASSWORD */}
+          <TouchableOpacity
+            className="flex-row items-center justify-between py-4"
+            onPress={() => setModalVisible(true)}
+            activeOpacity={0.7}
+          >
+            <View className="flex-row items-center flex-1">
+              <MaterialCommunityIcons
+                name="lock-outline"
+                size={20}
+                color="#14532d"
+              />
+              <Text className="ml-3 text-gray-800 font-semibold text-sm">
+                Change Password
+              </Text>
+            </View>
 
-            <Ionicons
-              name="mail-outline"
-              size={20}
-              color="#15803d"
-            />
-
-            <Text className="ml-3 text-green-700 font-semibold">
-              Email
-            </Text>
-
-          </View>
-
-          <Text className="text-gray-400">
-            {user?.email || ""}
-          </Text>
-
+            <MaterialCommunityIcons name="chevron-right" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
         </View>
-
-        {/* CHANGE PASSWORD */}
-        <TouchableOpacity
-          className="flex-row items-center justify-between bg-gray-100 p-4 rounded-xl mb-4"
-          onPress={() =>
-            setModalVisible(true)
-          }
-        >
-
-          <View className="flex-row items-center">
-
-            <Ionicons
-              name="lock-closed-outline"
-              size={20}
-              color="#15803d"
-            />
-
-            <Text className="ml-3 text-green-700 font-semibold">
-              Change Password
-            </Text>
-
-          </View>
-
-          <Ionicons
-            name="chevron-forward"
-            size={20}
-            color="#15803d"
-          />
-
-        </TouchableOpacity>
-
-      </View>
+      </ScrollView>
 
       {/* CHANGE PASSWORD MODAL */}
       <Modal
         visible={modalVisible}
         transparent
         animationType="fade"
+        onRequestClose={closePasswordModal}
+        statusBarTranslucent
       >
-
-        <View className="flex-1 justify-center items-center bg-black/40 px-6">
-
-          <View className="bg-white w-full rounded-3xl p-6">
-
-            <Text className="text-xl font-bold text-gray-800 mb-5">
-              Change Password
-            </Text>
-
-            {/* CURRENT PASSWORD */}
-            <TextInput
-              placeholder="Current Password"
-              secureTextEntry
-              value={currentPassword}
-              onChangeText={
-                setCurrentPassword
-              }
-              className="bg-gray-100 rounded-xl px-4 py-4 mb-4"
-            />
-
-            {/* NEW PASSWORD */}
-            <TextInput
-              placeholder="New Password"
-              secureTextEntry
-              value={newPassword}
-              onChangeText={
-                setNewPassword
-              }
-              className="bg-gray-100 rounded-xl px-4 py-4 mb-6"
-            />
-
-            <View className="flex-row">
-
-              {/* CANCEL */}
-              <TouchableOpacity
-                className="flex-1 bg-gray-200 py-4 rounded-xl mr-2 items-center"
-                onPress={() =>
-                  setModalVisible(false)
-                }
-              >
-
-                <Text className="font-semibold text-gray-700">
-                  Cancel
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          className="flex-1"
+        >
+          <View className="flex-1 justify-center items-center bg-black/40 px-6">
+            <View className="bg-white w-full rounded-[10px] p-6">
+              <View className="flex-row items-center justify-between mb-5">
+                <Text className="text-lg font-bold text-gray-800">
+                  Change Password
                 </Text>
 
-              </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={closePasswordModal}
+                  className="w-8 h-8 items-center justify-center"
+                >
+                  <MaterialCommunityIcons name="close" size={22} color="#9CA3AF" />
+                </TouchableOpacity>
+              </View>
 
-              {/* SAVE */}
-              <TouchableOpacity
-                className="flex-1 bg-green-700 py-4 rounded-xl ml-2 items-center"
-                onPress={
-                  handleChangePassword
-                }
-              >
+              {/* CURRENT PASSWORD */}
+              <View className="flex-row items-center bg-gray-100 rounded-[5px] px-4 mb-4">
+                <TextInput
+                  placeholder="Current Password"
+                  placeholderTextColor="#9CA3AF"
+                  secureTextEntry={!showCurrentPassword}
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  className="flex-1 py-4 text-gray-800"
+                />
 
-                <Text className="font-semibold text-white">
-                  Save
-                </Text>
+                <TouchableOpacity
+                  onPress={() =>
+                    setShowCurrentPassword(!showCurrentPassword)
+                  }
+                >
+                  <MaterialCommunityIcons
+                    name={showCurrentPassword ? "eye-off-outline" : "eye-outline"}
+                    size={20}
+                    color="#9CA3AF"
+                  />
+                </TouchableOpacity>
+              </View>
 
-              </TouchableOpacity>
+              {/* NEW PASSWORD */}
+              <View className="flex-row items-center bg-gray-100 rounded-[5px] px-4 mb-2">
+                <TextInput
+                  placeholder="New Password"
+                  placeholderTextColor="#9CA3AF"
+                  secureTextEntry={!showNewPassword}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  className="flex-1 py-4 text-gray-800"
+                />
 
+                <TouchableOpacity
+                  onPress={() => setShowNewPassword(!showNewPassword)}
+                >
+                  <MaterialCommunityIcons
+                    name={showNewPassword ? "eye-off-outline" : "eye-outline"}
+                    size={20}
+                    color="#9CA3AF"
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <Text className="text-gray-400 text-xs mb-6 ml-1">
+                Must be at least 6 characters
+              </Text>
+
+              <View className="flex-row">
+                {/* CANCEL */}
+                <TouchableOpacity
+                  className="flex-1 bg-gray-200 py-3.5 rounded-[5px] mr-2 items-center"
+                  onPress={closePasswordModal}
+                  disabled={savingPassword}
+                >
+                  <Text className="font-semibold text-gray-700">Cancel</Text>
+                </TouchableOpacity>
+
+                {/* SAVE */}
+                <TouchableOpacity
+                  className="flex-1 py-3.5 rounded-[5px] ml-2 items-center flex-row justify-center"
+                  style={{ backgroundColor: "#14532d", opacity: savingPassword ? 0.7 : 1 }}
+                  onPress={handleChangePassword}
+                  disabled={savingPassword}
+                >
+                  {savingPassword ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text className="font-semibold text-white">Save</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-
           </View>
-
-        </View>
-
+        </KeyboardAvoidingView>
       </Modal>
-
     </View>
   );
 };

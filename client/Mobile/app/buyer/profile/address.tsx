@@ -1,5 +1,4 @@
-import { Ionicons }
-  from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import AsyncStorage
   from "@react-native-async-storage/async-storage";
@@ -29,147 +28,86 @@ import {
   setDefaultAddress,
 } from "../../../src/services/addressService";
 
+import { useToast } from "../../../context/ToastContext";
+
 const AddressScreen = () => {
 
-  const router =
-    useRouter();
+  const router = useRouter();
 
-  const [addresses, setAddresses] =
-    useState<any[]>([]);
+  const { showToast } = useToast();
 
-  const [loading, setLoading] =
-    useState(true);
+  const [addresses, setAddresses] = useState<any[]>([]);
 
-  const [user, setUser] =
-    useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  const [user, setUser] = useState<any>(null);
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   // ================= LOAD =================
-  const loadAddresses =
-    async () => {
-
-      try {
-
+  const loadAddresses = async (isBackgroundRefresh = false) => {
+    try {
+      if (isBackgroundRefresh) {
+        setRefreshing(true);
+      } else {
         setLoading(true);
-
-        const userStr =
-          await AsyncStorage.getItem(
-            "user"
-          );
-
-        const parsedUser =
-          userStr
-            ? JSON.parse(userStr)
-            : null;
-
-        if (!parsedUser) return;
-
-        setUser(parsedUser);
-
-        const data =
-          await getUserAddresses(
-            parsedUser.uid ||
-            parsedUser.userId ||
-            parsedUser.id
-          );
-
-        setAddresses(data);
-
-      } catch (error) {
-
-        console.log(error);
-
-      } finally {
-
-        setLoading(false);
-
       }
-    };
+
+      const userStr = await AsyncStorage.getItem("user");
+      const parsedUser = userStr ? JSON.parse(userStr) : null;
+      if (!parsedUser) return;
+
+      setUser(parsedUser);
+
+      const data = await getUserAddresses(
+        parsedUser.uid || parsedUser.userId || parsedUser.id
+      );
+
+      setAddresses(data);
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
-
       loadAddresses();
-
     }, [])
   );
 
-  // ================= SET DEFAULT =================
-  const handleSetDefault =
-    async (
-      addressId: string
-    ) => {
-
-      try {
-
-        if (!user) return;
-
-        await setDefaultAddress(
-          user.uid ||
-          user.userId ||
-          user.id,
-
-          addressId
-        );
-
-        await loadAddresses();
-
-        Alert.alert(
-          "Success",
-          "Default address updated"
-        );
-
-      } catch (error) {
-
-        console.log(error);
-
-        Alert.alert(
-          "Error",
-          "Failed to update default address"
-        );
-      }
-    };
+  const handleSetDefault = async (addressId: string) => {
+    try {
+      if (!user) return;
+      await setDefaultAddress(user.uid || user.userId || user.id, addressId);
+      await loadAddresses(true); // ← background refresh, no full-screen blocker
+      showToast("Default address updated");
+    } catch (error) {
+      console.log(error);
+      showToast("Failed to update default address");
+    }
+  };
 
   // ================= DELETE =================
-  const handleDelete =
-    async (
-      addressId: string
-    ) => {
+  const handleDelete = (addressId: string) => {
+    setDeleteTargetId(addressId);
+  };
 
-      try {
-
-        Alert.alert(
-          "Delete Address",
-          "Are you sure you want to delete this address?",
-          [
-            {
-              text: "Cancel",
-              style: "cancel",
-            },
-
-            {
-              text: "Delete",
-
-              style: "destructive",
-
-              onPress:
-                async () => {
-
-                  await deleteAddress(
-                    addressId
-                  );
-
-                  await loadAddresses();
-                },
-            },
-          ]
-        );
-
-      } catch (error) {
-
-        console.log(error);
-
-      }
-    };
+  const handleConfirmedDelete = async () => {
+    if (!deleteTargetId) return;
+    try {
+      await deleteAddress(deleteTargetId);
+      await loadAddresses(true);
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setDeleteTargetId(null);
+    }
+  };
 
   // ================= LOADING =================
   if (loading) {
@@ -180,7 +118,7 @@ const AddressScreen = () => {
 
         <ActivityIndicator
           size="large"
-          color="#15803D"
+          color="#14532d"
         />
 
       </View>
@@ -189,10 +127,10 @@ const AddressScreen = () => {
 
   return (
 
-    <View className="flex-1 bg-green-700">
+    <View className="flex-1 bg-white">
 
       {/* HEADER */}
-      <View className="px-6 pt-16 pb-5 flex-row items-center">
+      <View className="bg-green-900 pt-14 pb-4 px-5 rounded-b-2xl flex-row items-center">
 
         <TouchableOpacity
           onPress={() =>
@@ -200,30 +138,30 @@ const AddressScreen = () => {
           }
         >
 
-          <Ionicons
-            name="arrow-back"
+          <MaterialCommunityIcons
+            name="arrow-left"
             size={24}
             color="white"
           />
 
         </TouchableOpacity>
 
-        <Text className="text-white text-2xl font-bold ml-5">
+        <Text className="text-white font-bold text-lg ml-4">
           My Address
         </Text>
 
       </View>
 
       {/* BODY */}
-      <View className="flex-1 bg-white rounded-t-[40px] px-5 pt-6">
+      <View className="flex-1" style={{ backgroundColor: "#fafafa" }}>
 
         {addresses.length === 0 ? (
 
-          <View className="flex-1 justify-center items-center -mt-20">
+          <View className="flex-1 justify-center items-center -mt-10">
 
-            <Ionicons
-              name="location-outline"
-              size={80}
+            <MaterialCommunityIcons
+              name="map-marker-outline"
+              size={72}
               color="#D1D5DB"
             />
 
@@ -248,18 +186,18 @@ const AddressScreen = () => {
             }
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{
+              padding: 16,
               paddingBottom: 120,
-              paddingTop: 5,
             }}
             renderItem={({ item }) => (
 
-              <TouchableOpacity
-                activeOpacity={0.85}
-                className={`rounded-3xl p-5 mb-4 border ${
-                  item.isDefault
-                    ? "bg-green-50 border-green-700"
-                    : "bg-gray-50 border-gray-200"
-                }`}
+              <View
+                className="rounded-[5px] p-5 mb-4"
+                style={{
+                  backgroundColor: "#ffffff",
+                  borderWidth: item.isDefault ? 1 : 0,
+                  borderColor: "#14532d",
+                }}
               >
 
                 {/* TOP */}
@@ -267,11 +205,11 @@ const AddressScreen = () => {
 
                   <View className="flex-1 pr-3">
 
-                    <Text className="text-gray-800 text-lg font-bold">
+                    <Text className="text-gray-800 text-base font-bold">
                       {item.fullName}
                     </Text>
 
-                    <Text className="text-gray-500 mt-1">
+                    <Text className="text-gray-500 text-sm mt-1">
                       {item.phone}
                     </Text>
 
@@ -279,9 +217,12 @@ const AddressScreen = () => {
 
                   {item.isDefault && (
 
-                    <View className="bg-green-700 px-3 py-1 rounded-full">
+                    <View
+                      className="px-3 py-1 rounded-[5px]"
+                      style={{ backgroundColor: "#14532d" }}
+                    >
 
-                      <Text className="text-white text-xs font-bold">
+                      <Text className="text-white text-[10px] font-bold">
                         DEFAULT
                       </Text>
 
@@ -292,9 +233,9 @@ const AddressScreen = () => {
                 </View>
 
                 {/* ADDRESS */}
-                <View className="mt-4">
+                <View className="mt-3">
 
-                  <Text className="text-gray-700 leading-6">
+                  <Text className="text-gray-600 text-sm leading-6">
 
                     {item.street}
 
@@ -323,7 +264,7 @@ const AddressScreen = () => {
                 </View>
 
                 {/* ACTIONS */}
-                <View className="flex-row mt-5">
+                <View className="flex-row mt-4 pt-4 border-t border-gray-100">
 
                   {!item.isDefault && (
 
@@ -333,11 +274,14 @@ const AddressScreen = () => {
                           item.id
                         )
                       }
-                      className="bg-green-700 px-4 py-2 rounded-xl mr-2"
+                      className="mr-5"
                     >
 
-                      <Text className="text-white text-xs font-bold">
-                        Set Default
+                      <Text
+                        className="text-sm font-semibold"
+                        style={{ color: "#14532d" }}
+                      >
+                        Set as Default
                       </Text>
 
                     </TouchableOpacity>
@@ -350,10 +294,9 @@ const AddressScreen = () => {
                         item.id
                       )
                     }
-                    className="bg-red-100 px-4 py-2 rounded-xl"
                   >
 
-                    <Text className="text-red-600 text-xs font-bold">
+                    <Text className="text-red-600 text-sm font-semibold">
                       Delete
                     </Text>
 
@@ -361,7 +304,7 @@ const AddressScreen = () => {
 
                 </View>
 
-              </TouchableOpacity>
+              </View>
             )}
           />
         )}
@@ -369,7 +312,14 @@ const AddressScreen = () => {
         {/* BUTTON */}
         <TouchableOpacity
           activeOpacity={0.85}
-          className="absolute bottom-6 left-5 right-5 bg-green-700 py-4 rounded-2xl items-center shadow-lg"
+          className="absolute bottom-6 left-5 right-5 py-4 rounded-[5px] items-center"
+          style={{
+            backgroundColor: "#14532d",
+            elevation: 4,
+            shadowColor: "#14532d",
+            shadowOpacity: 0.25,
+            shadowRadius: 8,
+          }}
           onPress={() =>
             router.push(
               "/buyer/profile/new-address"
@@ -378,13 +328,43 @@ const AddressScreen = () => {
         >
 
           <Text className="text-white font-bold text-base">
-            + Add New Address
+            Add New Address
           </Text>
 
         </TouchableOpacity>
 
       </View>
+    
+        {/* DELETE ADDRESS MODAL */}
+        {deleteTargetId && (
+          <View className="absolute inset-0 justify-center items-center bg-black/40">
+            <View className="bg-white rounded-[5px] p-6 w-80">
+              <Text className="text-gray-800 text-lg font-semibold mb-2">
+                Delete Address
+              </Text>
+              <Text className="text-gray-500 text-sm mb-4">
+                Are you sure you want to delete this address?
+              </Text>
 
+              <View className="flex-row justify-between mt-4">
+                <TouchableOpacity
+                  className="bg-gray-200 px-4 py-2 rounded-[5px] flex-1 mr-2 items-center"
+                  onPress={() => setDeleteTargetId(null)}
+                >
+                  <Text className="text-gray-700 font-semibold">Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  className="px-4 py-2 rounded-[5px] flex-1 ml-2 items-center"
+                  style={{ backgroundColor: "#dc2626" }}
+                  onPress={handleConfirmedDelete}
+                >
+                  <Text className="text-white font-semibold">Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
     </View>
   );
 };
