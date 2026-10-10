@@ -338,7 +338,10 @@ const AddressScreen = () => {
         {/* DELETE ADDRESS MODAL */}
         {deleteTargetId && (
           <View className="absolute inset-0 justify-center items-center bg-black/40">
-            <View className="bg-white rounded-[5px] p-6 w-80">
+            <View
+              className="bg-white rounded-[5px] p-6 w-80"
+              style={{ borderWidth: 1, borderColor: "#14532d" }}
+            >
               <Text className="text-gray-800 text-lg font-semibold mb-2">
                 Delete Address
               </Text>

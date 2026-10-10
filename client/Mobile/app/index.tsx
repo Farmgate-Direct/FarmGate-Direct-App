@@ -17,30 +17,31 @@ const Index = () => {
       <ImageBackground
         className="flex-1 justify-end"
         resizeMode="cover"
-         source={require("../assets/Farmgate-logos/starting-page.png")}
+         source={require("../assets/Farmgate-logos/starting-page.jpg")}
       >
         {/* Container */}
-        <View className="bg-white rounded-t-[50%] px-6 pt-10 pb-12 items-center">
+        <View className="bg-white rounded-t-[30px] px-5 pt-10 pb-6 items-center">
           {/* App logo */}
           <Image
-            className="w-14 h-14 mb-4"
+            className="w-14 h-14 mb-3"
             resizeMode="contain"
              source={require("../assets/Farmgate-logos/farmgate-logo.png")}
           />
 
           {/* Title*/}
-          <Text className="text-green-700 text-[30px] font-bold mb-2">
+          <Text className="text-black-700 text-[30px] font-bold mb-2">
             FARMGATE DIRECT
           </Text>
 
           {/* Short description */}
-          <Text className="text-center text-[#234a00] text-[15px] mb-8 px-4">
+          <Text className="text-center text-[#000000] text-[15px] mb-7 px-4">
             From the hands of farmers to the homes of buyers.
           </Text>
 
           {/* Started button */}
           <TouchableOpacity
-            className="bg-green-700 px-10 py-4 rounded-xl"
+            className="w-full items-center justify-center py-3.5 rounded-[5px]"
+            style={{ backgroundColor: "#14532d" }}
             onPress={() => router.push("/auth/login")}
           >
             <Text className="text-white font-bold text-lg">Get Started</Text>

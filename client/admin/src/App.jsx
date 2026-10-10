@@ -1,27 +1,31 @@
-import { Routes, Route,Navigate  } from "react-router-dom";
-import Sidebar from "./components/sidebar";
+import { Routes, Route, Navigate } from "react-router-dom";
+import Login from "./pages/login";
 import Dashboard from "./pages/dashboard";
-import RequestApproval from "./pages/request-approval";
-import OrderPayments from "./pages/order-payments";
-import RegisteredUser from "./pages/registered-user";
-import ReportAnalytics from "./pages/report-analytics";
+import Users from "./pages/users";
+import Approvals from "./pages/approvals";
+import Reports from "./pages/reports";
+import Orders from "./pages/orders";
+import Profile from "./pages/profile";
+import ProtectedRoute from "./components/protectedRoute";
+import AdminLayout from "./components/adminLayout";
 
 function App() {
   return (
-    <div className="flex">
-      <Sidebar />
-
-      <div className="flex-1 p-8 ml-64">
-        <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" />} />
+    <Routes>
+      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/login" element={<Login />} />
+      <Route element={<ProtectedRoute />}>
+        <Route element={<AdminLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/approvals" element={<RequestApproval />} />
-          <Route path="/users" element={<RegisteredUser />} />
-          <Route path="/reports" element={<ReportAnalytics />} />
-          <Route path="/orders" element={<OrderPayments />} />
-        </Routes>
-      </div>
-    </div>
+          <Route path="/approvals" element={<Approvals />} />
+          <Route path="/users" element={<Users />} />
+          <Route path="/orders" element={<Orders />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/profile" element={<Profile />} />
+        </Route>
+      </Route>
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
   );
 }
 

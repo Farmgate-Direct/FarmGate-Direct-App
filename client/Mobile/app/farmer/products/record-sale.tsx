@@ -66,54 +66,77 @@ const RecordSaleModal = ({ visible, onClose, product, onConfirm, loading }: Prop
   if (!product) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
-      <View className="flex-1 bg-black/40 justify-center px-6">
-        <View className="bg-white rounded-3xl p-6">
-          <View className="flex-row items-center mb-1">
-            <Ionicons name="storefront-outline" size={20} color="#15803d" />
-            <Text className="text-lg font-bold ml-2">Record Walk-in Sale</Text>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => {
+        resetForm();
+        onClose();
+      }}
+    >
+      <View className="flex-1 justify-center bg-black/40 px-6">
+        <View className="rounded-[10px] bg-white p-5">
+          <View className="mb-3 flex-row items-center">
+            <View className="mr-3 h-10 w-10 items-center justify-center rounded-[10px] bg-green-50">
+              <Ionicons name="storefront-outline" size={21} color="#14532d" />
+            </View>
+            <Text className="flex-1 text-lg font-bold text-gray-900">
+              Record walk-in sale
+            </Text>
           </View>
-          <Text className="text-xs text-gray-400 mb-4">
+          <Text className="mb-4 text-sm leading-5 text-gray-500">
             Para sa mga binili nang direkta sa farm (hindi dumaan sa app).
             Awtomatikong babawasan ang stock gamit ang FIFO (pinakamatandang
             batch muna) - kagaya rin ng ginagamit sa online orders.
           </Text>
 
-          <View className="bg-gray-50 rounded-xl px-4 py-3 mb-4">
-            <Text className="text-gray-500 text-xs">{product.name}</Text>
-            <Text className="text-gray-800 font-bold text-base">
+          <View className="mb-4 rounded-[10px] bg-gray-50 px-4 py-3">
+            <Text className="text-sm font-semibold text-gray-800">
+              {product.name}
+            </Text>
+            <Text className="mt-1 text-sm text-gray-500">
               {product.stock} {product.unit} available
             </Text>
           </View>
 
-          {error ? <Text className="text-red-500 text-xs mb-3">{error}</Text> : null}
+          {error ? (
+            <View className="mb-3 rounded-[10px] border border-red-100 bg-red-50 px-3 py-2">
+              <Text className="text-sm text-red-600">{error}</Text>
+            </View>
+          ) : null}
 
-          <Text className="text-xs text-gray-500 mb-1">QUANTITY NA NABENTA</Text>
+          <Text className="mb-1 text-xs font-semibold text-gray-600">
+            QUANTITY NA NABENTA ({product.unit})
+          </Text>
           <TextInput
             value={quantity}
             onChangeText={handleQuantityChange}
             keyboardType="numeric"
             placeholder={`Enter quantity (${product.unit})`}
-            className="bg-gray-100 px-4 py-3 rounded-xl mb-4 border border-gray-300"
+            placeholderTextColor="#9ca3af"
+            className="mb-5 rounded-[10px] border border-gray-300 bg-gray-50 px-4 py-3 text-gray-800"
           />
 
-          <View className="flex-row justify-between">
+          <View className="flex-row">
             <TouchableOpacity
               onPress={() => {
                 resetForm();
                 onClose();
               }}
-              className="w-[48%] border border-green-700 py-3 rounded-xl items-center"
+              className="mr-2 flex-1 items-center rounded-[10px] border border-[#14532d] py-3"
             >
-              <Text className="text-green-700 font-semibold">Cancel</Text>
+              <Text className="font-semibold text-[#14532d]">Cancel</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={handleConfirm}
               disabled={loading}
-              className={`w-[48%] py-3 rounded-xl items-center ${
-                loading ? "bg-gray-400" : "bg-green-700"
-              }`}
+              className="ml-2 flex-1 items-center rounded-[10px] py-3"
+              style={{
+                backgroundColor: loading ? "#9ca3af" : "#14532d",
+              }}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />

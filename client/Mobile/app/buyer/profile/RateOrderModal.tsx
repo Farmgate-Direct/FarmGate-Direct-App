@@ -107,7 +107,10 @@ const RateOrderModal = ({
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
       <View className="flex-1 bg-black/40 justify-center px-6">
-        <View className="bg-white rounded-[10px] p-6">
+        <View
+          className="bg-white rounded-[10px] p-6"
+          style={{ borderWidth: 1, borderColor: "#14532d" }}
+        >
           <Text className="text-lg font-bold mb-1">Rate this product</Text>
           <Text className="text-xs text-gray-400 mb-4">{product.name}</Text>
 

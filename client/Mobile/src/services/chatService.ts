@@ -2,11 +2,13 @@ import {
   addDoc,
   collection,
   doc,
+  FieldPath,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   where,
 } from "firebase/firestore";
 
@@ -39,6 +41,7 @@ export const sendMessage = async ({
     {
       users: [senderId, receiverId],
       lastMessage: text,
+      lastSenderId: senderId,
       lastMessageTime: serverTimestamp(),
       updatedAt: serverTimestamp(),
     },
@@ -79,7 +82,8 @@ export const listenMessages = (
 // ✅ FIX: query sa server, hindi client-side filter
 export const listenChats = (
   uid: string,
-  callback: (chats: any[]) => void
+  callback: (chats: any[]) => void,
+  onError?: (error: Error) => void
 ) => {
   const q = query(
     collection(db, "chats"),
@@ -87,11 +91,23 @@ export const listenChats = (
     orderBy("updatedAt", "desc")
   );
 
-  return onSnapshot(q, (snapshot) => {
-    const chats = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-    callback(chats);
-  });
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const chats = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      callback(chats);
+    },
+    onError
+  );
+};
+
+export const markChatRead = async (chatId: string, uid: string) => {
+  await updateDoc(
+    doc(db, "chats", chatId),
+    new FieldPath("lastReadAt", uid),
+    serverTimestamp()
+  );
 };

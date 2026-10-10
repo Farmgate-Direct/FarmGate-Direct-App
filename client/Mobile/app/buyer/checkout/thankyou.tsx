@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { formatPhilippinePhoneNumber } from "@/utils/validators";
 
 export default function ThankYou() {
 
@@ -112,7 +113,11 @@ export default function ThankYou() {
               {city}, {province}
             </Text>
 
-            <Text>{phone}</Text>
+            <Text>
+              {Array.isArray(phone)
+                ? formatPhilippinePhoneNumber(phone[0] || "")
+                : formatPhilippinePhoneNumber(phone || "")}
+            </Text>
 
             {delivery === "pickup" && (
               <>

@@ -21,10 +21,9 @@ import { subscribeToProducts } from "@/src/services/productService";
 import { getCartByBuyer } from "@/src/services/cartService";
 
 const SORT_OPTIONS = [
-  { label: "Relevance", icon: "options-outline" },
+  { label: "All", icon: "options-outline" },
   { label: "Highest Rated", icon: "star-outline" },
   { label: "Best Selling", icon: "flame-outline" },
-  { label: "Resell", icon: "repeat" },
 ];
 
 export default function Shop() {
@@ -34,7 +33,7 @@ export default function Shop() {
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState("Relevance");
+  const [sortBy, setSortBy] = useState("All");
   const [sortDropdownVisible, setSortDropdownVisible] = useState(false);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, right: 0 });
   const sortButtonRef = useRef<View>(null);
@@ -122,7 +121,7 @@ export default function Shop() {
         keyExtractor={(item, index) => item.docId ?? index.toString()}
         numColumns={2}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        contentContainerStyle={{ paddingBottom: 112 }}
         columnWrapperStyle={{ justifyContent: "space-between", paddingHorizontal: 14 }}
         ListHeaderComponent={
           <>
@@ -174,6 +173,7 @@ export default function Shop() {
         visible={sortDropdownVisible}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setSortDropdownVisible(false)}
       >
         <TouchableOpacity
@@ -182,11 +182,12 @@ export default function Shop() {
           onPress={() => setSortDropdownVisible(false)}
         >
           <View
-            className="absolute bg-white rounded-[14px] py-1.5 border border-gray-100"
+            className="absolute bg-white rounded-[14px] py-1.5"
             style={{
               top: dropdownPos.top,
               right: dropdownPos.right,
               width: 180,
+              overflow: "hidden",
               shadowColor: "#000",
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.12,

@@ -1,68 +1,77 @@
 import React from "react";
-import { View, Text, Image, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity, StatusBar, Image, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 const Register = () => {
   const router = useRouter();
 
   return (
-    <View className="flex-1 bg-green-700">
+    <View className="flex-1" style={{ backgroundColor: "#14532d" }}>
+      <StatusBar barStyle="light-content" backgroundColor="#14532d" />
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
       {/* Header */}
-      <View className="items-center justify-center pt-28 pb-20">
+      <View className="items-center justify-center px-6 py-32">
         <Image
           source={require("../../assets/Farmgate-logos/farmgate-logo.png")}
-          className="w-16 h-16 mb-3"
+          className="w-20 h-20 mb-3"
           resizeMode="contain"
         />
-        <Text className="text-white text-[30px] font-bold text-center">
+        <Text className="text-white text-2xl font-bold tracking-wide">
           FARMGATE DIRECT
+        </Text>
+        <Text className="text-green-100 text-sm mt-2 text-center">
+          From the hands of farmers to the homes of buyers.
         </Text>
       </View>
 
-      {/* Push white card to bottom */}
-      <View className="flex-1 justify-end">
-        <View className="bg-white rounded-t-[40px] px-6 pt-10 pb-10 items-center">
-          <View className="w-full items-center">
-            <Text className="text-[22px] font-bold text-green-700 text-center mb-8">
+      <View
+        className="flex-1 bg-white rounded-t-[30px] px-5 pt-5 -mt-5"
+        style={{ flexGrow: 1 }}
+      >
+        <View className="pt-5">
+            <Text className="text-2xl font-bold text-gray-900 text-center">
               Register As
             </Text>
+            <Text className="text-sm text-gray-500 text-center mt-2 mb-6">
+              Choose how you would like to use FarmGate.
+            </Text>
 
-            {/* Buyer */}
             <TouchableOpacity
-              className="mb-6 w-full"
+              className="mb-4 w-full flex-row items-center rounded-[10px] border border-gray-200 bg-white p-4"
               activeOpacity={0.8}
               onPress={() => router.push("./register-buyer")}
             >
-              <Image
-                source={require("../../assets/Farmgate-logos/register-buyer.jpg")}
-                className="w-full h-40 rounded-2xl"
-                resizeMode="cover"
-              />
-              <Text className="text-center text-green-700 font-semibold text-lg mt-3">
-                Buyer
-              </Text>
+              <MaterialCommunityIcons name="cart-outline" size={32} color="#14532d" />
+              <View className="flex-1 ml-4">
+                <Text className="font-semibold text-base text-gray-800">Buyer</Text>
+                <Text className="text-sm text-gray-500 mt-1">Find and purchase fresh produce</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color="#9ca3af" />
             </TouchableOpacity>
 
-            {/* Farmer */}
             <TouchableOpacity
-              className="w-full"
+              className="w-full flex-row items-center rounded-[10px] border border-gray-200 bg-white p-4"
               activeOpacity={0.8}
               onPress={() => router.push("./register-farmer")}
             >
-              <Image
-                source={require("../../assets/Farmgate-logos/register-farmer.jpg")}
-                className="w-full h-40 rounded-2xl"
-                resizeMode="cover"
-              />
-              <Text className="text-center text-green-700 font-semibold text-lg mt-3">
-                Farmer
-              </Text>
+              <MaterialCommunityIcons name="tractor-variant" size={32} color="#14532d" />
+              <View className="flex-1 ml-4">
+                <Text className="font-semibold text-base text-gray-800">Farmer</Text>
+                <Text className="text-sm text-gray-500 mt-1">List your farm and sell produce</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color="#9ca3af" />
             </TouchableOpacity>
 
-            <Text className="text-center text-gray-500 mt-10 mb-4">
+            <Text className="text-center text-gray-500 mt-6">
               Already have an account?{" "}
               <Text
-                className="text-green-700 font-semibold"
+                className="font-semibold"
+                style={{ color: "#14532d" }}
                 onPress={() => router.push("./login")}
               >
                 Sign in
@@ -70,7 +79,7 @@ const Register = () => {
             </Text>
           </View>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 };

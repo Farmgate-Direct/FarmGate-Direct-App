@@ -16,7 +16,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  Alert,
   ActivityIndicator,
 } from "react-native";
 
@@ -34,6 +33,8 @@ import {
 } from "firebase/firestore";
 
 import { db } from "@/FirebaseConfig";
+import { formatPhilippinePhoneNumber } from "@/utils/validators";
+import { useAppAlert } from "@/context/FarmerAlertContext";
 
 import {
   createOrder,
@@ -55,6 +56,7 @@ const DARK_GREEN =
 // ========================================================
 
 export default function Checkout() {
+  const Alert = useAppAlert();
   const {
     buyerId,
     items,
@@ -679,7 +681,7 @@ export default function Checkout() {
         // ==================================================
         const goToThankYou = () => {
           router.replace({
-            pathname: "/buyer/checkout/thankyou",
+            pathname: "/buyer/checkout/orderreceipt",
             params: {
               delivery,
               payment,
@@ -824,7 +826,7 @@ export default function Checkout() {
                     </Text>
 
                     <Text className="text-gray-600 text-sm mt-1">
-                      {address.phone}
+                      {formatPhilippinePhoneNumber(address.phone)}
                     </Text>
                   </>
                 ) : (

@@ -1,10 +1,13 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
 import {
-  Alert,
+  Dimensions,
   Image,
+  Modal,
   ScrollView,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   ActivityIndicator,
@@ -35,7 +38,6 @@ import {
   unarchiveProduct,
   archiveBatch,
   unarchiveBatch,
-  deleteHarvestRecord,
   getFarmerProducts,
   getArchivedProducts,
   getBatchesByProduct,
@@ -45,7 +47,10 @@ import {
   recordSale,
 } from "../../../src/services/productService";
 
-import { uploadImageAsync } from "../../../src/services/cloudinaryService";
+import {
+  uploadImageAsync,
+  uploadProductVideoAsync,
+} from "../../../src/services/cloudinaryService";
 
 const formatDate = (ts: number) =>
   new Date(ts).toLocaleDateString(undefined, {
@@ -53,10 +58,108 @@ const formatDate = (ts: number) =>
     day: "numeric",
   });
 
+const getVideoThumbnailUrl = (videoUrl: string) =>
+  videoUrl
+    .replace("/video/upload/", "/video/upload/so_0/")
+    .replace(/\.[^/.]+$/, ".jpg");
+
+const uploadProductMedia = async (product: {
+  image: string;
+  imagePublicId: string;
+  images?: string[];
+  imagePublicIds?: string[];
+  video?: string;
+  videoPublicId?: string;
+}) => {
+  const images = product.images?.length
+    ? product.images
+    : !product.video && product.image
+      ? [product.image]
+      : [];
+  const uploadedImages = await Promise.all(
+    images.map(async (uri, index) => {
+      if (uri.startsWith("https://")) {
+        return {
+          imageUrl: uri,
+          publicId:
+            product.imagePublicIds?.[index] ||
+            (index === 0 ? product.imagePublicId : ""),
+        };
+      }
+      return uploadImageAsync(uri);
+    })
+  );
+
+  let video = product.video || "";
+  let videoPublicId = video ? product.videoPublicId || "" : "";
+  if (video && !video.startsWith("https://")) {
+    const uploadedVideo = await uploadProductVideoAsync(video);
+    video = uploadedVideo.videoUrl;
+    videoPublicId = uploadedVideo.publicId;
+  }
+
+  return {
+    image:
+      uploadedImages[0]?.imageUrl ||
+      (video ? getVideoThumbnailUrl(video) : ""),
+    imagePublicId: uploadedImages[0]?.publicId || "",
+    images: uploadedImages.map((item) => item.imageUrl),
+    imagePublicIds: uploadedImages.map((item) => item.publicId),
+    video,
+    videoPublicId,
+  };
+};
+
 type ViewMode = "active" | "archived";
 
-const Product = () => {
-  const [viewMode, setViewMode] = useState<ViewMode>("active");
+// Options same pa rin — design lang ng modal gaya sa farm profile sort
+const FILTER_OPTIONS = [
+  { value: "active", label: "Active", icon: "leaf-outline" },
+  { value: "archived", label: "Archive", icon: "archive-outline" },
+  { value: "low_stock", label: "Low stock", icon: "warning-outline" },
+  { value: "out_of_stock", label: "Out of stock", icon: "ban-outline" },
+] as const;
+
+type ProductScreenProps = {
+  detailProductId?: string;
+  initialViewMode?: ViewMode;
+};
+
+type Confirmation = {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  destructive?: boolean;
+  onConfirm: () => Promise<void>;
+};
+
+export const ProductScreen = ({
+  detailProductId,
+  initialViewMode,
+}: ProductScreenProps = {}) => {
+  const { filter: routeFilter } = useLocalSearchParams<{ filter?: string }>();
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    initialViewMode || "active"
+  );
+  const [listFilter, setListFilter] = useState<
+    "active" | "archived" | "low_stock" | "out_of_stock"
+  >(initialViewMode === "archived" ? "archived" : "active");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, right: 0 });
+  const sortButtonRef = useRef<View>(null);
+
+  // Para ma-position ang modal sa ilalim ng button — gaya sa farm profile
+  const openSortDropdown = () => {
+    sortButtonRef.current?.measureInWindow((x, y, width, height) => {
+      const screenWidth = Dimensions.get("window").width;
+      setDropdownPos({
+        top: y + height + 6,
+        right: screenWidth - (x + width),
+      });
+      setShowFilterModal(true);
+    });
+  };
 
   const [products, setProducts] = useState<ProductType[]>([]);
   const [archivedProducts, setArchivedProducts] = useState<ProductType[]>([]);
@@ -70,10 +173,6 @@ const Product = () => {
   const [harvestsByBatch, setHarvestsByBatch] = useState<
     Record<string, HarvestRecordType[]>
   >({});
-
-  const [expandedProductId, setExpandedProductId] = useState<string | null>(
-    null
-  );
 
   const [expandedBatchId, setExpandedBatchId] = useState<string | null>(null);
 
@@ -89,12 +188,14 @@ const Product = () => {
     useState<ProductType | null>(null);
 
   const [selectedBatch, setSelectedBatch] = useState<BatchType | null>(null);
+  const [selectedBatchUnit, setSelectedBatchUnit] = useState("");
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showEditBatchModal, setShowEditBatchModal] = useState(false);
   const [showRecordSaleModal, setShowRecordSaleModal] = useState(false);
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
 
   const [recordingSale, setRecordingSale] = useState(false);
 
@@ -115,6 +216,16 @@ const Product = () => {
       fetchProducts();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (
+      !detailProductId &&
+      (routeFilter === "low_stock" || routeFilter === "out_of_stock")
+    ) {
+      setViewMode("active");
+      setListFilter(routeFilter);
+    }
+  }, [detailProductId, routeFilter]);
 
   const fetchProducts = async () => {
     try {
@@ -211,12 +322,11 @@ const Product = () => {
     try {
       setUploading(true);
 
-      const upload = await uploadImageAsync(product.image);
+      const media = await uploadProductMedia(product);
 
       const newProduct: CreateProductInput = {
         ...product,
-        image: upload.imageUrl,
-        imagePublicId: upload.publicId,
+        ...media,
         farmerId: user.uid,
         farmerName: user.fullName,
         farmName: user.farmName,
@@ -236,6 +346,7 @@ const Product = () => {
       setShowAddModal(false);
     } catch (err) {
       console.log("ADD HARVEST ERROR:", err);
+      throw err;
     } finally {
       setUploading(false);
     }
@@ -247,29 +358,32 @@ const Product = () => {
     try {
       setEditing(true);
 
-      let imageUrl = product.image;
-      let imagePublicId = product.imagePublicId;
-
-      if (!imageUrl.startsWith("https://")) {
-        await deleteCloudinaryImage(product.imagePublicId);
-
-        const upload = await uploadImageAsync(imageUrl);
-
-        imageUrl = upload.imageUrl;
-        imagePublicId = upload.publicId;
-      }
+      const media = await uploadProductMedia(product);
 
       await updateProductInfo({
         ...product,
-        image: imageUrl,
-        imagePublicId,
+        ...media,
       });
+
+      const previousImageIds =
+        product.imagePublicIds?.length
+          ? product.imagePublicIds
+          : product.imagePublicId
+            ? [product.imagePublicId]
+            : [];
+      const retainedImageIds = new Set(media.imagePublicIds);
+      await Promise.all(
+        previousImageIds
+          .filter((publicId) => publicId && !retainedImageIds.has(publicId))
+          .map(deleteCloudinaryImage)
+      );
 
       await fetchProducts();
 
       setShowEditModal(false);
     } catch (err) {
       console.log("EDIT PRODUCT ERROR:", err);
+      throw err;
     } finally {
       setEditing(false);
     }
@@ -353,125 +467,66 @@ const Product = () => {
   // ================= UNARCHIVE PRODUCT =================
 
   const handleUnarchiveProduct = (product: ProductType) => {
-    Alert.alert(
-      "Unarchive Product",
-      `Ibalik sa listing si "${product.name}"? Makikita na itong muli ng mga buyer.`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Unarchive",
-          onPress: async () => {
-            try {
-              await unarchiveProduct(product.docId);
+    setConfirmation({
+      title: "Unarchive Product",
+      message: `Ibalik sa listing si "${product.name}"? Makikita na itong muli ng mga buyer.`,
+      confirmLabel: "Unarchive",
+      onConfirm: async () => {
+        try {
+          await unarchiveProduct(product.docId);
 
-              await fetchProducts();
-            } catch (err) {
-              console.log("UNARCHIVE PRODUCT ERROR:", err);
-            }
-          },
-        },
-      ]
-    );
+          await fetchProducts();
+        } catch (err) {
+          console.log("UNARCHIVE PRODUCT ERROR:", err);
+        }
+      },
+    });
   };
 
   // ================= ARCHIVE SINGLE BATCH =================
 
   const handleArchiveBatchPress = (batch: BatchType) => {
-    Alert.alert(
-      "Archive Batch",
-      `I-a-archive ang Batch ${String(
+    setConfirmation({
+      title: "Archive Batch",
+      message: `I-a-archive ang Batch ${String(
         batch.batchNumber
       ).padStart(
         3,
         "0"
       )}? Hindi na ito ibebenta o makikita ng buyer, pero puwede mo pa itong ma-unarchive.`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Archive",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await archiveBatch(batch.docId);
+      confirmLabel: "Archive",
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await archiveBatch(batch.docId);
 
-              await fetchProducts();
-            } catch (err) {
-              console.log("ARCHIVE BATCH ERROR:", err);
-            }
-          },
-        },
-      ]
-    );
+          await fetchProducts();
+        } catch (err) {
+          console.log("ARCHIVE BATCH ERROR:", err);
+        }
+      },
+    });
   };
 
   // ================= UNARCHIVE BATCH =================
 
   const handleUnarchiveBatch = (batch: BatchType) => {
-    Alert.alert(
-      "Unarchive Batch",
-      `Ibalik sa aktibong benta si Batch ${String(
+    setConfirmation({
+      title: "Unarchive Batch",
+      message: `Ibalik sa aktibong benta si Batch ${String(
         batch.batchNumber
       ).padStart(3, "0")}?`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Unarchive",
-          onPress: async () => {
-            try {
-              await unarchiveBatch(batch.docId);
+      confirmLabel: "Unarchive",
+      onConfirm: async () => {
+        try {
+          await unarchiveBatch(batch.docId);
 
-              await fetchProducts();
-            } catch (err) {
-              console.log("UNARCHIVE BATCH ERROR:", err);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  // ================= DELETE HARVEST RECORD =================
-
-  const handleDeleteHarvest = (
-    batchId: string,
-    harvest: HarvestRecordType
-  ) => {
-    Alert.alert(
-      "Delete Harvest Record",
-      `Tanggalin ang harvest record na ito (${formatDate(
-        harvest.harvestDate
-      )}, ${harvest.quantity})? Hindi na ito mababawi.`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteHarvestRecord(harvest.docId);
-
-              await loadHarvestsForBatch(batchId);
-
-              await fetchProducts();
-            } catch (err) {
-              console.log("DELETE HARVEST ERROR:", err);
-            }
-          },
-        },
-      ]
-    );
+          await fetchProducts();
+        } catch (err) {
+          console.log("UNARCHIVE BATCH ERROR:", err);
+        }
+      },
+    });
   };
 
   // ================= TOGGLE HARVEST RECORDS =================
@@ -491,88 +546,111 @@ const Product = () => {
 
   if (loading) {
     return (
-      <View className="flex-1 justify-center items-center bg-green-800">
-        <ActivityIndicator color="#fff" size="large" />
+      <View className="flex-1 items-center justify-center bg-[#f5f5f5]">
+        <ActivityIndicator color="#14532d" size="large" />
       </View>
     );
   }
 
-  const displayedProducts =
+  const listedProducts =
     viewMode === "active" ? products : archivedProducts;
+  const filterByStock = (product: ProductType) => {
+    const stock = getTotalStock(product.docId);
+    const outOfStock = product.status === "Out of Stock" || stock <= 0;
+    if (listFilter === "low_stock") return !outOfStock && stock <= 5;
+    if (listFilter === "out_of_stock") return outOfStock;
+    return true;
+  };
+  const displayedProducts = (detailProductId
+    ? listedProducts.filter((product) => product.docId === detailProductId)
+    : listedProducts.filter(filterByStock).filter((product) =>
+        product.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
+      ));
+  const selectedFilterLabel = {
+    active: "Active",
+    archived: "Archived",
+    low_stock: "Low stock",
+    out_of_stock: "Out of stock",
+  }[listFilter];
 
   return (
-    <View className="flex-1 bg-green-700">
+    <View className="flex-1 bg-[#f5f5f5]">
       {/* HEADER */}
 
-      <View className="px-6 pt-16 pb-6">
-        <View className="flex-row justify-between items-center">
-          <View>
-            <Text className="text-white text-[25px] font-bold">
-              Product Listing
-            </Text>
-
-            <Text className="text-white text-[15px]">
-              {displayedProducts.length}{" "}
-              {viewMode === "active"
-                ? "Products listed"
-                : "Archived"}
-            </Text>
-          </View>
-
-          {user?.role === "farmer" &&
-            viewMode === "active" && (
-              <TouchableOpacity
-                onPress={() => setShowAddModal(true)}
-              >
-                <Ionicons
-                  name="add-circle"
-                  size={35}
-                  color="#fff"
-                />
-              </TouchableOpacity>
-            )}
-        </View>
-
-        {/* ACTIVE / ARCHIVED TABS */}
-
-        {user?.role === "farmer" && (
-          <View className="flex-row bg-white/15 rounded-2xl p-1 mt-4 self-start">
-            {(["active", "archived"] as const).map(
-              (mode) => (
-                <TouchableOpacity
-                  key={mode}
-                  onPress={() => setViewMode(mode)}
-                  className={`px-5 py-2 rounded-xl ${
-                    viewMode === mode
-                      ? "bg-white"
-                      : ""
-                  }`}
-                >
-                  <Text
-                    className={`text-xs font-semibold capitalize ${
-                      viewMode === mode
-                        ? "text-green-800"
-                        : "text-white"
-                    }`}
-                  >
-                    {mode}
-                  </Text>
-                </TouchableOpacity>
-              )
-            )}
-          </View>
+      <View className="bg-green-900 pt-14 pb-4 px-5 rounded-b-2xl flex-row items-center">
+        {detailProductId && (
+          <TouchableOpacity
+            onPress={() => router.back()}
+            className="mr-3 h-10 w-10 items-center justify-center"
+            accessibilityRole="button"
+            accessibilityLabel="Back to products"
+          >
+            <Ionicons name="arrow-back" size={22} color="white" />
+          </TouchableOpacity>
         )}
+        <View className="flex-1">
+          <Text className="text-white font-bold text-lg">
+            {detailProductId
+              ? displayedProducts[0]?.name || "Product batches"
+              : "Product list"}
+          </Text>
+        </View>
       </View>
 
       {/* LIST */}
 
-      <View className="flex-1 bg-gray-100 rounded-t-[35px] px-6 pt-6">
-        <ScrollView showsVerticalScrollIndicator={false}>
+      <View className="flex-1 px-4 pt-4">
+        {!detailProductId && user?.role === "farmer" && (
+          <View className="mb-3 flex-row items-center">
+            <View className="mr-2 flex-1 flex-row items-center rounded-[10px] border border-gray-200 bg-white px-3">
+              <Ionicons name="search-outline" size={19} color="#9ca3af" />
+              <TextInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search products"
+                placeholderTextColor="#9ca3af"
+                className="ml-2 flex-1 py-3 text-gray-800"
+                returnKeyType="search"
+              />
+              {!!searchQuery && (
+                <TouchableOpacity onPress={() => setSearchQuery("")}>
+                  <Ionicons name="close-circle" size={18} color="#9ca3af" />
+                </TouchableOpacity>
+              )}
+            </View>
+            <TouchableOpacity
+              ref={sortButtonRef}
+              onPress={() => (showFilterModal ? setShowFilterModal(false) : openSortDropdown())}
+              className="flex-row items-center rounded-[10px] border border-gray-200 bg-white px-3 py-3"
+              accessibilityRole="button"
+              accessibilityLabel={`Sort by ${selectedFilterLabel}`}
+            >
+              <MaterialIcons name="sort" size={19} color="#14532d" />
+              <Text className="ml-1.5 text-xs font-semibold text-gray-700">
+                Sort by: {selectedFilterLabel}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingBottom: detailProductId ? 24 : 112,
+          }}
+        >
           {displayedProducts.length === 0 && (
-            <Text className="text-center text-gray-500 mt-10">
-              {viewMode === "active"
-                ? "No products available"
-                : "No archived products"}
+            <Text className="mt-10 text-center text-gray-500">
+              {detailProductId
+                ? "This product could not be found."
+                : searchQuery.trim()
+                ? "No products match your search."
+                : listFilter === "low_stock"
+                ? "No low-stock products."
+                : listFilter === "out_of_stock"
+                ? "No out-of-stock products."
+                : listFilter === "archived"
+                ? "No archived products."
+                : "No products available"}
             </Text>
           )}
 
@@ -592,169 +670,198 @@ const Product = () => {
               product.docId
             );
 
-            const isExpanded =
-              expandedProductId === product.docId;
+            const isExpanded = detailProductId === product.docId;
 
             return (
               <View
                 key={product.docId}
-                className={`bg-white rounded-2xl p-4 mb-4 ${
+                className={`mb-3 rounded-[10px] bg-white p-3 ${
                   viewMode === "archived"
                     ? "opacity-70"
                     : ""
                 }`}
               >
-                {/* PRODUCT INFO */}
-
-                <View className="flex-row items-center">
-                  {product.image ? (
-                    <Image
-                      source={{ uri: product.image }}
-                      className="w-20 h-20 rounded-xl"
-                    />
-                  ) : (
-                    <View className="w-20 h-20 bg-gray-200 rounded-xl" />
-                  )}
-
-                  <View className="flex-1 ml-4">
-                    <Text className="text-xs text-gray-400">
-                      {product.farmName}
-                    </Text>
-
-                    <Text className="font-semibold text-gray-800">
-                      {product.name}
-                    </Text>
-
-                    <Text className="text-gray-600">
-                      {totalStock} current stock /{product.unit} (total{" "}
-                      {activeBatches.length}{" "}
-                      {activeBatches.length === 1
-                        ? "batch"
-                        : "batches"}
-                      )
-                    </Text>
-
-                    <Text className="font-bold text-gray-800">
-                      ₱{Number(product.price || 0).toFixed(2)}
-                    </Text>
-
-                    {product.totalReviews > 0 && (
-                      <Text className="text-xs text-yellow-600">
-                        ★ {product.rating.toFixed(1)} (
-                        {product.totalReviews} reviews)
-                      </Text>
-                    )}
-                  </View>
-
-                  {/* ACTIVE PRODUCT ACTIONS */}
-
-                  {user?.role === "farmer" &&
-                    viewMode === "active" && (
-                      <View className="items-center gap-2">
-                        {/* WALK-IN SALE */}
-
-                        <TouchableOpacity
-                          className="bg-purple-100 p-2 rounded-lg"
-                          onPress={() => {
-                            setSelectedProduct(product);
-                            setShowRecordSaleModal(
-                              true
-                            );
-                          }}
-                        >
-                          <Ionicons
-                            name="storefront-outline"
-                            size={18}
-                            color="#7e22ce"
+                {!detailProductId ? (
+                  <>
+                    <View className="flex-row items-center">
+                      <TouchableOpacity
+                        onPress={() =>
+                          router.push({
+                            pathname: "/farmer/products/[id]",
+                            params: {
+                              id: product.docId,
+                              mode: viewMode,
+                            },
+                          })
+                        }
+                        className="flex-1 flex-row items-center"
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel={`View batches for ${product.name}`}
+                      >
+                        {product.image ? (
+                          <Image
+                            source={{ uri: product.image }}
+                            className="h-[72px] w-[72px] rounded-[10px]"
                           />
-                        </TouchableOpacity>
+                        ) : (
+                          <View className="h-[72px] w-[72px] items-center justify-center rounded-[10px] bg-gray-100">
+                            <Ionicons
+                              name="leaf-outline"
+                              size={24}
+                              color="#9ca3af"
+                            />
+                          </View>
 
-                        {/* EDIT PRODUCT */}
+                        )}
+                        <View className="ml-3 flex-1">
+                          <Text
+                            className="text-base font-bold text-gray-900"
+                            numberOfLines={1}
+                          >
+                            {product.name}
+                          </Text>
+                          <Text className="mt-1 text-sm text-gray-500">
+                            {totalStock} {product.unit} in stock
+                          </Text>
+                          <Text className="mt-1 text-sm font-semibold text-gray-800">
+                            ₱{Number(product.price || 0).toFixed(2)} /{" "}
+                            {product.unit.replace(/^per /, "")}
+                          </Text>
+                        </View>
+                        <Ionicons
+                          name="chevron-forward"
+                          size={20}
+                          color="#9ca3af"
+                        />
+                      </TouchableOpacity>
+                    </View>
 
-                        <TouchableOpacity
-                          className="bg-blue-100 p-2 rounded-lg"
-                          onPress={() => {
-                            setSelectedProduct(product);
-                            setShowEditModal(true);
-                          }}
-                        >
-                          <MaterialIcons
-                            name="edit"
-                            size={18}
-                            color="#2563eb"
-                          />
-                        </TouchableOpacity>
-
-                        {/* ARCHIVE PRODUCT */}
-
-                        <TouchableOpacity
-                          className="bg-orange-100 p-2 rounded-lg"
-                          onPress={() => {
-                            setSelectedProduct(product);
-                            setShowDeleteModal(true);
-                          }}
-                        >
-                          <MaterialIcons
-                            name="archive"
-                            size={18}
-                            color="#c2410c"
-                          />
-                        </TouchableOpacity>
+                    {user?.role === "farmer" && (
+                      <View className="mt-3 flex-row border-t border-gray-100 pt-2">
+                        {viewMode === "active" ? (
+                          <>
+                            <TouchableOpacity
+                              onPress={() => {
+                                setSelectedProduct(product);
+                                setShowRecordSaleModal(true);
+                              }}
+                              className="flex-1 flex-row items-center justify-center py-2"
+                              accessibilityRole="button"
+                              accessibilityLabel={`Record sale for ${product.name}`}
+                            >
+                              <Ionicons
+                                name="storefront-outline"
+                                size={17}
+                                color="#14532d"
+                              />
+                              <Text className="ml-1.5 text-xs font-semibold text-gray-700">
+                                Record sale
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => {
+                                setSelectedProduct(product);
+                                setShowEditModal(true);
+                              }}
+                              className="flex-1 flex-row items-center justify-center py-2"
+                              accessibilityRole="button"
+                              accessibilityLabel={`Edit ${product.name}`}
+                            >
+                              <MaterialIcons
+                                name="edit"
+                                size={17}
+                                color="#14532d"
+                              />
+                              <Text className="ml-1.5 text-xs font-semibold text-gray-700">
+                                Edit
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => {
+                                setSelectedProduct(product);
+                                setShowDeleteModal(true);
+                              }}
+                              className="flex-1 flex-row items-center justify-center py-2"
+                              accessibilityRole="button"
+                              accessibilityLabel={`Archive ${product.name}`}
+                            >
+                              <MaterialIcons
+                                name="archive"
+                                size={17}
+                                color="#b45309"
+                              />
+                              <Text className="ml-1.5 text-xs font-semibold text-gray-700">
+                                Archive
+                              </Text>
+                            </TouchableOpacity>
+                          </>
+                        ) : (
+                          <TouchableOpacity
+                            onPress={() => handleUnarchiveProduct(product)}
+                            className="flex-row items-center py-2"
+                            accessibilityRole="button"
+                          >
+                            <Ionicons
+                              name="refresh-outline"
+                              size={17}
+                              color="#14532d"
+                            />
+                            <Text className="ml-1.5 text-xs font-semibold text-gray-700">
+                              Restore product
+                            </Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                     )}
-
-                  {/* ARCHIVED PRODUCT */}
-
-                  {user?.role === "farmer" &&
-                    viewMode === "archived" && (
+                  </>
+                ) : (
+                  <View className="flex-row items-center">
+                    {product.image ? (
+                      <Image
+                        source={{ uri: product.image }}
+                        className="h-20 w-20 rounded-[10px]"
+                      />
+                    ) : (
+                      <View className="h-20 w-20 rounded-[10px] bg-gray-100" />
+                    )}
+                    <View className="ml-4 flex-1">
+                      <Text className="text-xs text-gray-500">
+                        {product.farmName}
+                      </Text>
+                      <Text className="mt-1 text-sm text-gray-600">
+                        {totalStock} {product.unit} available ·{" "}
+                        {activeBatches.length} active{" "}
+                        {activeBatches.length === 1 ? "batch" : "batches"}
+                      </Text>
+                      <Text className="mt-1 font-bold text-gray-900">
+                        ₱{Number(product.price || 0).toFixed(2)} /{" "}
+                        {product.unit.replace(/^per /, "")}
+                      </Text>
+                    </View>
+                    {user?.role === "farmer" && viewMode === "active" && (
                       <TouchableOpacity
-                        className="bg-green-100 px-3 py-2 rounded-lg"
-                        onPress={() =>
-                          handleUnarchiveProduct(
-                            product
-                          )
-                        }
+                        onPress={() => {
+                          setSelectedProduct(product);
+                          setShowEditModal(true);
+                        }}
+                        className="h-10 w-10 items-center justify-center rounded-[10px] bg-gray-50"
+                        accessibilityRole="button"
+                        accessibilityLabel={`Edit ${product.name}`}
                       >
-                        <Text className="text-green-700 text-xs font-semibold">
-                          Unarchive
-                        </Text>
+                        <MaterialIcons name="edit" size={18} color="#14532d" />
                       </TouchableOpacity>
                     )}
-                </View>
-
-                {/* BATCHES TOGGLE */}
-
-                <TouchableOpacity
-                  onPress={() =>
-                    setExpandedProductId(
-                      isExpanded
-                        ? null
-                        : product.docId
-                    )
-                  }
-                  className="flex-row items-center justify-center mt-3 py-2 border-t border-gray-100"
-                >
-                  <Text className="text-green-700 text-xs font-semibold mr-1">
-                    {isExpanded
-                      ? "Hide batches"
-                      : "View batches"}
-                  </Text>
-
-                  <Ionicons
-                    name={
-                      isExpanded
-                        ? "chevron-up"
-                        : "chevron-down"
-                    }
-                    size={14}
-                    color="#15803d"
-                  />
-                </TouchableOpacity>
+                  </View>
+                )}
 
                 {/* BATCH LIST */}
 
                 {isExpanded && (
                   <View className="mt-2">
+                    <Text className="mb-3 mt-2 text-base font-bold text-gray-900">
+                      Batches
+                    </Text>
                     {activeBatches.length === 0 &&
                       archivedBatches.length === 0 && (
                         <Text className="text-gray-400 text-xs text-center py-2">
@@ -781,14 +888,14 @@ const Product = () => {
                       return (
                         <View
                           key={batch.docId}
-                          className="bg-gray-50 rounded-xl p-3 mb-2"
+                          className="mb-2 rounded-[10px] bg-gray-50 p-3"
                         >
                           <View className="flex-row items-center justify-between">
                             <View className="flex-1">
                               {/* BATCH NAME + CURRENT STATUS */}
 
                               <View className="flex-row items-center flex-wrap">
-                                <Text className="font-semibold text-gray-700 text-xs">
+                                <Text className="text-sm font-bold text-gray-800">
                                   Batch{" "}
                                   {String(
                                     batch.batchNumber
@@ -799,9 +906,9 @@ const Product = () => {
                                 </Text>
 
                                 {isCurrent && (
-                                  <View className="bg-green-100 rounded-full px-2 py-0.5 ml-2">
-                                    <Text className="text-green-700 text-[10px]">
-                                      selling now
+                                  <View className="ml-2 rounded-full bg-green-50 px-2 py-0.5">
+                                    <Text className="text-[11px] font-semibold text-[#14532d]">
+                                      Selling now
                                     </Text>
                                   </View>
                                 )}
@@ -809,16 +916,17 @@ const Product = () => {
 
                               {/* STOCK / PRICE / STATUS */}
 
-                              <Text className="text-gray-600 text-xs">
-                                {batch.stock} current stock/
-                                {product.unit} · ₱
-                                {Number(product.price || 0).toFixed(2)}{" "}
-                                · {batch.status}
+                              <Text className="mt-1 text-sm text-gray-700">
+                                Stock: {batch.stock} {product.unit}
+                              </Text>
+                              <Text className="mt-0.5 text-xs text-gray-500">
+                                ₱{Number(product.price || 0).toFixed(2)} per{" "}
+                                {product.unit.replace(/^per /, "")} · {batch.status}
                               </Text>
 
                               {/* TOTAL HARVESTED */}
 
-                              <Text className="text-gray-400 text-[10px]">
+                              <Text className="mt-1 text-xs text-gray-500">
                                 Total harvested:{" "}
                                 {batch.totalHarvested}{" "}
                                 {product.unit}
@@ -833,11 +941,14 @@ const Product = () => {
                                 {/* EDIT BATCH */}
 
                                 <TouchableOpacity
-                                  className="bg-blue-100 p-2 rounded-lg mr-2"
+                                  className="mr-2 flex-row items-center rounded-[10px] bg-white px-3 py-2"
+                                  accessibilityRole="button"
+                                  accessibilityLabel={`Edit batch ${batch.batchNumber}`}
                                   onPress={() => {
                                     setSelectedBatch(
                                       batch
                                     );
+                                    setSelectedBatchUnit(product.unit);
 
                                     setShowEditBatchModal(
                                       true
@@ -846,15 +957,20 @@ const Product = () => {
                                 >
                                   <MaterialIcons
                                     name="edit"
-                                    size={16}
-                                    color="#2563eb"
+                                    size={17}
+                                    color="#14532d"
                                   />
+                                  <Text className="ml-1 text-xs font-semibold text-gray-700">
+                                    Edit
+                                  </Text>
                                 </TouchableOpacity>
 
                                 {/* ARCHIVE BATCH */}
 
                                 <TouchableOpacity
-                                  className="bg-orange-100 p-2 rounded-lg"
+                                  className="flex-row items-center rounded-[10px] bg-white px-3 py-2"
+                                  accessibilityRole="button"
+                                  accessibilityLabel={`Archive batch ${batch.batchNumber}`}
                                   onPress={() =>
                                     handleArchiveBatchPress(
                                       batch
@@ -863,9 +979,12 @@ const Product = () => {
                                 >
                                   <MaterialIcons
                                     name="archive"
-                                    size={16}
-                                    color="#c2410c"
+                                    size={17}
+                                    color="#b45309"
                                   />
+                                  <Text className="ml-1 text-xs font-semibold text-gray-700">
+                                    Archive
+                                  </Text>
                                 </TouchableOpacity>
                               </View>
                             )}
@@ -879,9 +998,10 @@ const Product = () => {
                                 batch.docId
                               )
                             }
-                            className="flex-row items-center mt-2"
+                            className="mt-3 flex-row items-center py-1"
+                            accessibilityRole="button"
                           >
-                            <Text className="text-green-700 text-[10px] font-semibold mr-1">
+                            <Text className="mr-1 text-xs font-semibold text-gray-700">
                               {harvestsExpanded
                                 ? "Hide harvests"
                                 : "View harvests"}
@@ -893,8 +1013,8 @@ const Product = () => {
                                   ? "chevron-up"
                                   : "chevron-down"
                               }
-                              size={12}
-                              color="#15803d"
+                              size={16}
+                              color="#14532d"
                             />
                           </TouchableOpacity>
 
@@ -902,9 +1022,12 @@ const Product = () => {
 
                           {harvestsExpanded && (
                             <View className="mt-2 pl-2 border-l-2 border-gray-200">
+                              <Text className="mb-1 text-[10px] text-gray-400">
+                                Harvest records are saved for your sales history and cannot be deleted.
+                              </Text>
                               {harvests.length ===
                                 0 && (
-                                <Text className="text-gray-400 text-[10px] py-1">
+                                <Text className="py-1 text-xs text-gray-500">
                                   No harvest records yet
                                 </Text>
                               )}
@@ -921,9 +1044,9 @@ const Product = () => {
                                 return (
                                   <View
                                     key={h.docId}
-                                    className="flex-row items-center justify-between py-1"
+                                    className="flex-row items-center justify-between py-2"
                                   >
-                                    <Text className="text-gray-600 text-[10px]">
+                                  <Text className="flex-1 text-xs text-gray-600">
                                       {recordType ===
                                       "restock"
                                         ? `${formatDate(
@@ -934,23 +1057,6 @@ const Product = () => {
                                           )} · ${h.quantity} added/${product.unit} (${h.remainingQuantity} last stock)`}
                                     </Text>
 
-                                    {user?.role ===
-                                      "farmer" && (
-                                      <TouchableOpacity
-                                        onPress={() =>
-                                          handleDeleteHarvest(
-                                            batch.docId,
-                                            h
-                                          )
-                                        }
-                                      >
-                                        <MaterialIcons
-                                          name="delete-outline"
-                                          size={14}
-                                          color="#dc2626"
-                                        />
-                                      </TouchableOpacity>
-                                    )}
                                   </View>
                                 );
                               })}
@@ -964,13 +1070,13 @@ const Product = () => {
 
                     {archivedBatches.length > 0 && (
                       <View className="mt-1">
-                        <Text className="text-gray-400 text-[10px] font-semibold uppercase mb-1">
+                        <Text className="mb-2 text-sm font-semibold text-gray-700">
                           Archived Batches
                         </Text>
 
                         {viewMode ===
                           "archived" && (
-                          <Text className="text-gray-400 text-[10px] mb-2 italic">
+                          <Text className="mb-2 text-sm text-gray-500">
                             Naka-archive ang buong
                             produktong ito, kaya
                             naka-lock din ang mga
@@ -984,11 +1090,11 @@ const Product = () => {
                           (batch) => (
                             <View
                               key={batch.docId}
-                              className="bg-gray-50 rounded-xl p-3 mb-2 opacity-60"
+                              className="mb-2 rounded-[10px] bg-gray-50 p-3"
                             >
                               <View className="flex-row items-center justify-between">
                                 <View className="flex-1">
-                                  <Text className="font-semibold text-gray-500 text-xs">
+                                  <Text className="text-sm font-semibold text-gray-700">
                                     Batch{" "}
                                     {String(
                                       batch.batchNumber
@@ -999,7 +1105,7 @@ const Product = () => {
                                     (archived)
                                   </Text>
 
-                                  <Text className="text-gray-400 text-xs mt-0.5">
+                                  <Text className="mt-1 text-xs text-gray-500">
                                     {batch.stock}{" "}
                                     {product.unit}{" "}
                                     · {batch.status}
@@ -1013,14 +1119,15 @@ const Product = () => {
                                   viewMode ===
                                     "active" && (
                                     <TouchableOpacity
-                                      className="bg-green-100 px-3 py-1.5 rounded-lg"
+                                      className="flex-row items-center rounded-[10px] bg-green-50 px-3 py-2"
                                       onPress={() =>
                                         handleUnarchiveBatch(
                                           batch
                                         )
                                       }
+                                      accessibilityRole="button"
                                     >
-                                      <Text className="text-green-700 text-[10px] font-semibold">
+                                      <Text className="text-xs font-semibold text-[#14532d]">
                                         Unarchive
                                       </Text>
                                     </TouchableOpacity>
@@ -1038,6 +1145,89 @@ const Product = () => {
           })}
         </ScrollView>
       </View>
+
+      {!detailProductId && user?.role === "farmer" && viewMode === "active" && (
+        <TouchableOpacity
+          onPress={() => setShowAddModal(true)}
+          className="absolute bottom-[82px] right-5 h-14 w-14 items-center justify-center rounded-full"
+          style={{
+            backgroundColor: "#14532d",
+            elevation: 8,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 3 },
+            shadowOpacity: 0.24,
+            shadowRadius: 5,
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Add product"
+        >
+          <Ionicons name="add" size={30} color="white" />
+        </TouchableOpacity>
+      )}
+
+      {/* SORT MODAL — design gaya sa farm profile sort (naka-anchor sa button).
+          Same options pa rin. */}
+      <Modal
+        visible={showFilterModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowFilterModal(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={{ flex: 1 }}
+          onPress={() => setShowFilterModal(false)}
+        >
+          <View
+            className="absolute bg-white rounded-[14px] py-1.5"
+            style={{
+              top: dropdownPos.top,
+              right: dropdownPos.right,
+              width: 180,
+              overflow: "hidden",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.12,
+              shadowRadius: 10,
+              elevation: 8,
+            }}
+          >
+            {FILTER_OPTIONS.map((opt) => {
+              const active = listFilter === opt.value;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  onPress={() => {
+                    setListFilter(opt.value);
+                    setViewMode(opt.value === "archived" ? "archived" : "active");
+                    setShowFilterModal(false);
+                  }}
+                  className={`flex-row items-center justify-between px-3.5 py-2.5 ${
+                    active ? "bg-green-50" : ""
+                  }`}
+                >
+                  <View className="flex-row items-center gap-2">
+                    <Ionicons
+                      name={opt.icon as any}
+                      size={16}
+                      color={active ? "#14532d" : "#6b7280"}
+                    />
+                    <Text
+                      className={`text-xs font-semibold ${
+                        active ? "text-green-900" : "text-gray-700"
+                      }`}
+                    >
+                      {opt.label}
+                    </Text>
+                  </View>
+                  {active && <Ionicons name="checkmark-circle" size={16} color="#14532d" />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* MODALS */}
 
@@ -1064,6 +1254,7 @@ const Product = () => {
       <EditBatchModal
         visible={showEditBatchModal}
         batch={selectedBatch}
+        unit={selectedBatchUnit}
         onClose={() => setShowEditBatchModal(false)}
         onSave={handleSaveBatch}
         loading={savingBatch}
@@ -1084,8 +1275,54 @@ const Product = () => {
         onConfirm={handleRecordSale}
         loading={recordingSale}
       />
+
+      <Modal
+        visible={confirmation !== null}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setConfirmation(null)}
+      >
+        <View className="flex-1 items-center justify-center bg-black/40 px-6">
+          <View className="w-full max-w-[340px] rounded-[10px] bg-white p-6">
+            <Text className="mb-2 text-lg font-semibold text-gray-800">
+              {confirmation?.title}
+            </Text>
+            <Text className="text-sm leading-5 text-gray-600">
+              {confirmation?.message}
+            </Text>
+            <View className="mt-6 flex-row justify-between">
+              <TouchableOpacity
+                className="mr-2 flex-1 items-center rounded-[10px] bg-gray-200 px-4 py-3"
+                onPress={() => setConfirmation(null)}
+              >
+                <Text className="font-semibold text-gray-700">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="ml-2 flex-1 items-center rounded-[10px] px-4 py-3"
+                style={{
+                  backgroundColor: confirmation?.destructive
+                    ? "#dc2626"
+                    : "#14532d",
+                }}
+                onPress={() => {
+                  const action = confirmation?.onConfirm;
+                  setConfirmation(null);
+                  if (action) void action();
+                }}
+              >
+                <Text className="font-semibold text-white">
+                  {confirmation?.confirmLabel}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
 
-export default Product;
+export default function Product() {
+  return <ProductScreen />;
+}

@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
@@ -10,16 +10,18 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Image,
 } from "react-native";
 import {
   createChatId,
   listenMessages,
+  markChatRead,
   sendMessage,
 } from "../../../src/services/chatService";
 
 const FarmerChat = () => {
   const router = useRouter();
-  const { buyerId, buyerName } = useLocalSearchParams();
+  const { buyerId, buyerName, buyerProfileImage } = useLocalSearchParams();
 
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState("");
@@ -43,7 +45,12 @@ const FarmerChat = () => {
         setChatId(id);
 
         // ✅ store unsubscribe
-        unsubscribe = listenMessages(id, setMessages);
+        unsubscribe = listenMessages(id, (nextMessages) => {
+          setMessages(nextMessages);
+          markChatRead(id, user.uid).catch((error) =>
+            console.error("MARK FARMER CHAT READ ERROR:", error)
+          );
+        });
       } catch (error) {
         console.log(error);
       }
@@ -71,26 +78,37 @@ const FarmerChat = () => {
 
   return (
     <KeyboardAvoidingView
-      className="flex-1 bg-green-700"
+      className="flex-1 bg-white"
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       {/* HEADER */}
-      <View className="bg-green-700 px-6 py-4 pt-16 flex-row items-center">
+      <View className="bg-green-900 pt-14 pb-4 px-5 rounded-b-2xl flex-row items-center">
         <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="white" />
+          <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
         </TouchableOpacity>
 
-        <View className="w-10 h-10 rounded-full bg-green-200 items-center justify-center ml-3">
-          <Ionicons name="person" size={20} color="#15803d" />
+        <View
+          className="ml-3 h-10 w-10 items-center justify-center overflow-hidden rounded-full"
+          style={{ backgroundColor: "#f0fdf4" }}
+        >
+          {buyerProfileImage ? (
+            <Image
+              source={{ uri: String(buyerProfileImage) }}
+              style={{ width: "100%", height: "100%" }}
+              resizeMode="cover"
+            />
+          ) : (
+            <MaterialCommunityIcons name="account" size={20} color="#14532d" />
+          )}
         </View>
 
-        <Text className="text-white text-xl font-bold ml-3">
-          {buyerName}
+        <Text className="ml-3 text-lg font-bold text-white">
+          {buyerName || "Buyer"}
         </Text>
       </View>
 
       {/* CHAT */}
-      <View className="flex-1 bg-white rounded-t-[40px] px-4 pt-6">
+      <View className="flex-1 bg-gray-50 px-4 pt-4">
         <FlatList
           ref={flatListRef}
           data={messages}
@@ -101,8 +119,8 @@ const FarmerChat = () => {
           }
           ListEmptyComponent={
             <View className="items-center mt-20">
-              <Ionicons
-                name="chatbubble-outline"
+              <MaterialCommunityIcons
+                name="chat-outline"
                 size={50}
                 color="#d1d5db"
               />
@@ -123,9 +141,10 @@ const FarmerChat = () => {
                 <View
                   className={`px-4 py-2 rounded-2xl max-w-[75%] ${
                     isMe
-                      ? "bg-green-600 rounded-br-none"
-                      : "bg-gray-200 rounded-bl-none"
+                      ? "rounded-br-none"
+                      : "bg-white rounded-bl-none"
                   }`}
+                  style={isMe ? { backgroundColor: "#14532d" } : undefined}
                 >
                   <Text
                     className={
@@ -156,20 +175,22 @@ const FarmerChat = () => {
       </View>
 
       {/* INPUT */}
-      <View className="bg-white border-t border-gray-200">
-        <View className="px-4 py-3 flex-row items-center">
+      <View className="bg-white px-3 py-2 mb-5">
+        <View className="flex-row items-center rounded-full bg-gray-100 px-2 py-1">
           <TextInput
             placeholder="Type a message..."
-            className="flex-1 bg-gray-100 rounded-full px-4 py-3 mr-2"
+            className="flex-1 px-2 py-2 text-gray-700"
+            placeholderTextColor="#9ca3af"
             value={text}
             onChangeText={setText}
             onSubmitEditing={handleSend}
           />
           <TouchableOpacity
             onPress={handleSend}
-            className="bg-green-600 p-3 rounded-full"
+            className="rounded-full p-3"
+            style={{ backgroundColor: "#14532d" }}
           >
-            <Ionicons name="send" size={18} color="white" />
+            <MaterialCommunityIcons name="send" size={18} color="white" />
           </TouchableOpacity>
         </View>
       </View>

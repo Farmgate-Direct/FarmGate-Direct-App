@@ -19,6 +19,10 @@ export type CreateProductInput = {
   description: string;
   image: string;
   imagePublicId: string;
+  images?: string[];
+  imagePublicIds?: string[];
+  video?: string;
+  videoPublicId?: string;
 
   farmerId: string;
   farmerName: string;

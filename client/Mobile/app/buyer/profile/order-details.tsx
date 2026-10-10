@@ -312,6 +312,7 @@ export default function OrderDetails() {
         return "#7C3AED";
 
       case "delivered":
+      case "claimed":
         return "#2563EB";
 
       case "cancelled":
@@ -329,6 +330,7 @@ export default function OrderDetails() {
       case "processing": return "Processing";
       case "to_receive": return "To Receive";
       case "delivered": return "Delivered";
+      case "claimed": return "Claimed";
       case "cancelled": return "Cancelled";
       default: return status;
     }
@@ -783,7 +785,7 @@ export default function OrderDetails() {
           {order.deliveredAt && (
             <TimelineRow
               icon="checkmark-circle-outline"
-              title="Delivered"
+              title={order.delivery === "pickup" ? "Claimed" : "Delivered"}
               date={order.deliveredAt}
               color="#2563EB"
               showLine={false}
@@ -800,7 +802,7 @@ export default function OrderDetails() {
             />
           )}
 
-          {order.status === "delivered" && (
+          {(order.status === "delivered" || order.status === "claimed") && (
             <View className="bg-green-50 border border-green-100 rounded-[5px] p-3 mt-4 flex-row items-center">
               <Ionicons
                 name="checkmark-circle"
@@ -808,7 +810,9 @@ export default function OrderDetails() {
                 color={DARK_GREEN}
               />
               <Text className="text-green-900 font-semibold text-sm ml-2">
-                Your order has been delivered.
+                {order.status === "claimed"
+                  ? "Your order has been claimed."
+                  : "Your order has been delivered."}
               </Text>
             </View>
           )}
@@ -853,8 +857,8 @@ export default function OrderDetails() {
             }) => {
 
               const canRate =
-                order.status ===
-                  "delivered" &&
+                (order.status === "delivered" ||
+                  order.status === "claimed") &&
                 !item.reviewed;
 
               return (
@@ -933,8 +937,8 @@ export default function OrderDetails() {
                   )}
 
                   {/* REVIEWED */}
-                  {order.status ===
-                    "delivered" &&
+                  {(order.status === "delivered" ||
+                    order.status === "claimed") &&
                     item.reviewed && (
 
                     <View className="mt-3 self-start py-2.5 flex-row items-center">
@@ -1143,7 +1147,10 @@ export default function OrderDetails() {
 
         <View className="flex-1 bg-black/50 justify-end">
 
-          <View className="bg-white rounded-t-[20px] p-6">
+          <View
+            className="bg-white rounded-t-[20px] p-6"
+            style={{ borderTopWidth: 2, borderColor: DARK_GREEN }}
+          >
 
             {/* HANDLE */}
             <View className="w-10 h-1 bg-gray-300 rounded-full self-center mb-5" />
@@ -1186,11 +1193,11 @@ export default function OrderDetails() {
                       }
 
                     }}
-                    className={`border rounded-[5px] px-4 py-3 mb-3 flex-row items-center ${
-                      selected
-                        ? "border-green-900 bg-green-50"
-                        : "border-gray-200 bg-white"
-                    }`}
+                    className="border rounded-[5px] px-4 py-3 mb-3 flex-row items-center"
+                    style={{
+                      borderColor: selected ? DARK_GREEN : "#e5e7eb",
+                      backgroundColor: selected ? "#f0fdf4" : "#ffffff",
+                    }}
                   >
 
                     <Ionicons
@@ -1293,7 +1300,10 @@ export default function OrderDetails() {
       {showConfirmCancelModal && (
         <View className="absolute inset-0 justify-center items-center bg-black/40">
 
-          <View className="bg-white rounded-[5px] p-6 w-80">
+          <View
+            className="bg-white rounded-[5px] p-6 w-80"
+            style={{ borderWidth: 1, borderColor: DARK_GREEN }}
+          >
 
             <Text className="text-gray-800 text-lg font-semibold mb-4">
               Confirm Cancellation

@@ -37,6 +37,8 @@ const AccountSetting = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [currentPasswordError, setCurrentPasswordError] = useState("");
+  const [newPasswordError, setNewPasswordError] = useState("");
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
@@ -114,17 +116,25 @@ const AccountSetting = () => {
   // ================= CHANGE PASSWORD =================
   const handleChangePassword = async () => {
     try {
+      setCurrentPasswordError("");
+      setNewPasswordError("");
+
       if (!currentPassword || !newPassword) {
-        showToast("Please fill all fields");
+        if (!currentPassword) {
+          setCurrentPasswordError("Enter your current password.");
+        }
+        if (!newPassword) {
+          setNewPasswordError("Enter a new password.");
+        }
         return;
       }
       if (currentPassword === newPassword) {
-        showToast("New password must be different from current password.");
+        setNewPasswordError("New password must be different from your current password.");
         return;
       }
 
       if (newPassword.length < 6) {
-        showToast("Password must be at least 6 characters");
+        setNewPasswordError("Password must be at least 6 characters.");
         return;
       }
 
@@ -150,9 +160,32 @@ const AccountSetting = () => {
 
       closePasswordModal();
       showToast("Password changed successfully");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log(error);
-      showToast(error.message || "Something went wrong. Please try again.");
+
+      const errorCode =
+        typeof error === "object" && error !== null && "code" in error
+          ? error.code
+          : undefined;
+
+      if (
+        errorCode === "auth/invalid-credential" ||
+        errorCode === "auth/wrong-password"
+      ) {
+        setCurrentPasswordError("Current password is incorrect.");
+        return;
+      }
+
+      if (errorCode === "auth/weak-password") {
+        setNewPasswordError("Choose a stronger password.");
+        return;
+      }
+
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "Failed to change password. Please try again."
+      );
     } finally {
       setSavingPassword(false);
     }
@@ -162,8 +195,16 @@ const AccountSetting = () => {
     setModalVisible(false);
     setCurrentPassword("");
     setNewPassword("");
+    setCurrentPasswordError("");
+    setNewPasswordError("");
     setShowCurrentPassword(false);
     setShowNewPassword(false);
+  };
+
+  const openPasswordModal = () => {
+    setCurrentPasswordError("");
+    setNewPasswordError("");
+    setModalVisible(true);
   };
 
   return (
@@ -288,7 +329,7 @@ const AccountSetting = () => {
           {/* CHANGE PASSWORD */}
           <TouchableOpacity
             className="flex-row items-center justify-between py-4"
-            onPress={() => setModalVisible(true)}
+            onPress={openPasswordModal}
             activeOpacity={0.7}
           >
             <View className="flex-row items-center flex-1">
@@ -320,7 +361,10 @@ const AccountSetting = () => {
           className="flex-1"
         >
           <View className="flex-1 justify-center items-center bg-black/40 px-6">
-            <View className="bg-white w-full rounded-[10px] p-6">
+            <View
+              className="bg-white w-full rounded-[10px] p-6"
+              style={{ borderWidth: 1, borderColor: "#14532d" }}
+            >
               <View className="flex-row items-center justify-between mb-5">
                 <Text className="text-lg font-bold text-gray-800">
                   Change Password
@@ -335,49 +379,75 @@ const AccountSetting = () => {
               </View>
 
               {/* CURRENT PASSWORD */}
-              <View className="flex-row items-center bg-gray-100 rounded-[5px] px-4 mb-4">
-                <TextInput
-                  placeholder="Current Password"
-                  placeholderTextColor="#9CA3AF"
-                  secureTextEntry={!showCurrentPassword}
-                  value={currentPassword}
-                  onChangeText={setCurrentPassword}
-                  className="flex-1 py-4 text-gray-800"
-                />
-
-                <TouchableOpacity
-                  onPress={() =>
-                    setShowCurrentPassword(!showCurrentPassword)
-                  }
-                >
-                  <MaterialCommunityIcons
-                    name={showCurrentPassword ? "eye-off-outline" : "eye-outline"}
-                    size={20}
-                    color="#9CA3AF"
+              <View className="mb-4">
+                <View className={`flex-row items-center rounded-[10px] border bg-gray-100 px-4 ${currentPasswordError ? "border-red-500" : "border-transparent"}`}>
+                  <TextInput
+                    placeholder="Current Password"
+                    placeholderTextColor="#9CA3AF"
+                    secureTextEntry={!showCurrentPassword}
+                    value={currentPassword}
+                    onChangeText={(value) => {
+                      setCurrentPassword(value);
+                      setCurrentPasswordError("");
+                    }}
+                    className="flex-1 py-4 text-gray-800"
+                    accessibilityHint={currentPasswordError || undefined}
                   />
-                </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() =>
+                      setShowCurrentPassword(!showCurrentPassword)
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={showCurrentPassword ? "Hide current password" : "Show current password"}
+                  >
+                    <MaterialCommunityIcons
+                      name={showCurrentPassword ? "eye-off-outline" : "eye-outline"}
+                      size={20}
+                      color="#9CA3AF"
+                    />
+                  </TouchableOpacity>
+                </View>
+                {currentPasswordError ? (
+                  <Text className="mt-1 px-1 text-xs text-red-600">
+                    {currentPasswordError}
+                  </Text>
+                ) : null}
               </View>
 
               {/* NEW PASSWORD */}
-              <View className="flex-row items-center bg-gray-100 rounded-[5px] px-4 mb-2">
-                <TextInput
-                  placeholder="New Password"
-                  placeholderTextColor="#9CA3AF"
-                  secureTextEntry={!showNewPassword}
-                  value={newPassword}
-                  onChangeText={setNewPassword}
-                  className="flex-1 py-4 text-gray-800"
-                />
-
-                <TouchableOpacity
-                  onPress={() => setShowNewPassword(!showNewPassword)}
-                >
-                  <MaterialCommunityIcons
-                    name={showNewPassword ? "eye-off-outline" : "eye-outline"}
-                    size={20}
-                    color="#9CA3AF"
+              <View className="mb-2">
+                <View className={`flex-row items-center rounded-[10px] border bg-gray-100 px-4 ${newPasswordError ? "border-red-500" : "border-transparent"}`}>
+                  <TextInput
+                    placeholder="New Password"
+                    placeholderTextColor="#9CA3AF"
+                    secureTextEntry={!showNewPassword}
+                    value={newPassword}
+                    onChangeText={(value) => {
+                      setNewPassword(value);
+                      setNewPasswordError("");
+                    }}
+                    className="flex-1 py-4 text-gray-800"
+                    accessibilityHint={newPasswordError || undefined}
                   />
-                </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => setShowNewPassword(!showNewPassword)}
+                    accessibilityRole="button"
+                    accessibilityLabel={showNewPassword ? "Hide new password" : "Show new password"}
+                  >
+                    <MaterialCommunityIcons
+                      name={showNewPassword ? "eye-off-outline" : "eye-outline"}
+                      size={20}
+                      color="#9CA3AF"
+                    />
+                  </TouchableOpacity>
+                </View>
+                {newPasswordError ? (
+                  <Text className="mt-1 px-1 text-xs text-red-600">
+                    {newPasswordError}
+                  </Text>
+                ) : null}
               </View>
 
               <Text className="text-gray-400 text-xs mb-6 ml-1">

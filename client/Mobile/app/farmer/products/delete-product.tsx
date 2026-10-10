@@ -1,5 +1,6 @@
 // farmer/products/delete-product.tsx
 import React from "react";
+import { Ionicons } from "@expo/vector-icons";
 import {
   Modal,
   Text,
@@ -24,22 +25,29 @@ type Props = {
 // ma-unarchive sa hinaharap kung kinakailangan.
 const DeleteProductModal = ({ visible, onCancel, onConfirm, loading, product }: Props) => {
   return (
-    <Modal visible={visible} transparent animationType="fade">
-      <View className="flex-1 bg-black/40 justify-center items-center px-6">
-        <View className="bg-white rounded-2xl p-6 w-full">
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={onCancel}
+    >
+      <View className="flex-1 items-center justify-center bg-black/40 px-6">
+        <View className="w-full max-w-[360px] rounded-[10px] bg-white p-5">
+          <View className="mb-3 flex-row items-center">
+            <View className="mr-3 h-10 w-10 items-center justify-center rounded-[10px] bg-amber-50">
+              <Ionicons name="archive-outline" size={20} color="#b45309" />
+            </View>
+            <Text className="flex-1 text-lg font-bold text-gray-900">
+              Archive product?
+            </Text>
+          </View>
 
-          {/* TITLE */}
-          <Text className="text-center text-lg font-bold mb-2 text-orange-600">
-            Archive Product
-          </Text>
-
-          {/* PRODUCT NAME */}
-          <Text className="text-center text-gray-800 font-semibold mb-3">
+          <Text className="mb-2 text-sm font-semibold text-gray-800">
             {product?.name || "This product"}
           </Text>
 
-          {/* CONFIRM MESSAGE */}
-          <Text className="text-center text-gray-500 mb-6">
+          <Text className="mb-6 text-sm leading-5 text-gray-600">
             I-a-archive ang{" "}
             <Text className="font-bold text-gray-700">
               {product?.name}
@@ -50,31 +58,26 @@ const DeleteProductModal = ({ visible, onCancel, onConfirm, loading, product }: 
           </Text>
 
           {/* BUTTONS */}
-          <View className="flex-row justify-between">
-
+          <View className="flex-row">
             <TouchableOpacity
               onPress={onCancel}
-              className="w-[48%] border border-gray-400 py-3 rounded-xl items-center"
+              className="mr-2 flex-1 items-center rounded-[10px] border border-gray-300 py-3"
             >
-              <Text className="text-gray-700 font-semibold">
-                Cancel
-              </Text>
+              <Text className="font-semibold text-gray-700">Cancel</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={onConfirm}
               disabled={loading}
-              className="w-[48%] bg-orange-600 py-3 rounded-xl items-center"
+              className="ml-2 flex-1 items-center rounded-[10px] py-3"
+              style={{ backgroundColor: "#dc2626" }}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text className="text-white font-bold">
-                  Archive
-                </Text>
+                <Text className="font-bold text-white">Archive</Text>
               )}
             </TouchableOpacity>
-
           </View>
         </View>
       </View>

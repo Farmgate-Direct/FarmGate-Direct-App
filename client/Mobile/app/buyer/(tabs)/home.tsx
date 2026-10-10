@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
-  Keyboard,
   ScrollView,
   StatusBar,
   Text,
@@ -25,6 +24,7 @@ import { subscribeToProducts } from "@/src/services/productService";
 import { getBuyerOrders } from "@/src/services/orderService";
 import { getSavedFarms } from "@/src/services/savedFarmService";
 import { getCartByBuyer } from "@/src/services/cartService";
+import { useBuyerNotifications } from "@/src/hooks/UseBuyerNotification";
 
 const TOP_SELLING_LIMIT = 10;
 
@@ -42,20 +42,50 @@ export default function Home() {
 
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<ProductType[]>([]);
-  const [activeOrder, setActiveOrder] = useState<OrderType | null>(null);
+  const [activeOrders, setActiveOrders] = useState<OrderType[]>([]);
+  const [showOtherOrders, setShowOtherOrders] = useState(false);
   const [savedFarms, setSavedFarms] = useState<SavedFarm[]>([]);
   const [cartCount, setCartCount] = useState(0);
+  const { unreadCount, inAppEnabled } = useBuyerNotifications();
 
   const [activeCategory, setActiveCategory] = useState("All");
-  const [searchQuery, setSearchQuery] = useState("");
-
   const [bannerIdx, setBannerIdx] = useState(0);
   const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
   const BANNERS = [
-    { id: "1", image: require("../../../assets/banners/banner1.jpg") },
-    { id: "2", image: require("../../../assets/banners/banner2.jpg") },
-    { id: "3", image: require("../../../assets/banners/banner3.jpg") },
+    {
+      id: "top-products",
+      eyebrow: "CUSTOMER FAVORITES",
+      title: "Top products",
+      description: "Explore the products shoppers love most.",
+      icon: "trophy-outline",
+      backgroundColor: "#14532d",
+      iconBackground: "#ffffff",
+      iconColor: "#14532d",
+      route: "/buyer/discover/top-products",
+    },
+    {
+      id: "weekly-best-seller",
+      eyebrow: "LAST 7 DAYS",
+      title: "Best seller this week",
+      description: "See what's selling across local farms.",
+      icon: "calendar-week",
+      backgroundColor: "#ecfdf5",
+      iconBackground: "#d1fae5",
+      iconColor: "#14532d",
+      route: "/buyer/discover/weekly-best-seller",
+    },
+    {
+      id: "top-farmers",
+      eyebrow: "LOCAL FARM SPOTLIGHT",
+      title: "Top-selling farmers",
+      description: "Meet the farms behind the favorites.",
+      icon: "storefront-outline",
+      backgroundColor: "#fef3c7",
+      iconBackground: "#fef3c7",
+      iconColor: "#92400e",
+      route: "/buyer/discover/top-farmers",
+    },
   ];
 
   const loadHome = useCallback(async () => {
@@ -77,10 +107,11 @@ export default function Home() {
         getCartByBuyer(uid),
       ]);
 
-      const active =
-        orders.find((o) => o.status === "pending" || o.status === "processing") ||
-        null;
-      setActiveOrder(active);
+      const active = orders.filter(
+        (order) => order.status === "pending" || order.status === "processing"
+      );
+      setActiveOrders(active);
+      setShowOtherOrders(false);
       setSavedFarms(farms);
 
       const count = cartItems.reduce(
@@ -117,36 +148,32 @@ export default function Home() {
             activeCategory.trim().toLowerCase()
         );
 
-  const resaleProducts: ProductType[] = [];
-
   const topSelling = [...categoryFiltered]
     .sort((a, b) => (b.totalSales || 0) - (a.totalSales || 0))
     .slice(0, TOP_SELLING_LIMIT);
 
-  const searchResults =
-    searchQuery.trim().length === 0
-      ? []
-      : products
-          .filter(
-            (p) =>
-              p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              (p.farmName || "").toLowerCase().includes(searchQuery.toLowerCase())
-          )
-          .slice(0, 6);
+  const activeOrder = activeOrders[0] || null;
 
-  const closeSearch = () => {
-    setSearchQuery("");
-    Keyboard.dismiss();
-  };
+  const openOrder = (order: OrderType) => {
+    if (order.status === "pending") {
+      router.push({
+        pathname: "/buyer/checkout/orderreceipt",
+        params: {
+          orderIds: JSON.stringify([order.id || ""]),
+          from: "orders",
+        },
+      });
+      return;
+    }
 
-  const goToProduct = (id: string) => {
-    closeSearch();
-    router.push({ pathname: "/buyer/products/[id]", params: { id } });
+    router.push({
+      pathname: "/buyer/profile/order-details",
+      params: { orderId: order.id || "" },
+    });
   };
 
   const hasAnyContent =
-    !!activeOrder ||
-    resaleProducts.length > 0 ||
+    activeOrders.length > 0 ||
     topSelling.length > 0 ||
     savedFarms.length > 0;
 
@@ -167,46 +194,122 @@ export default function Home() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingBottom: 112 }}
       >
         <Header_Buyer
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
+          notificationCount={inAppEnabled ? unreadCount : 0}
+          onNotificationPress={() => router.push("/buyer/notifications" as any)}
         />
 
-        {/* ── BANNER CAROUSEL ── */}
+        {/* ── BUYER LEADERBOARD BANNERS ── */}
         <View style={{ marginTop: 12, paddingHorizontal: 16 }}>
           <ScrollView
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={(e) =>
-              setBannerIdx(Math.round(e.nativeEvent.contentOffset.x / (SCREEN_WIDTH - 32)))
+            onMomentumScrollEnd={(event) =>
+              setBannerIdx(
+                Math.round(
+                  event.nativeEvent.contentOffset.x / (SCREEN_WIDTH - 32)
+                )
+              )
             }
           >
-            {BANNERS.map((b) => (
-              <Image
-                key={b.id}
-                source={b.image}
+            {BANNERS.map((banner) => (
+              <TouchableOpacity
+                key={banner.id}
+                activeOpacity={0.88}
+                onPress={() => router.push(banner.route as any)}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${banner.title}`}
                 style={{
                   width: SCREEN_WIDTH - 32,
                   height: 160,
                   borderRadius: 10,
+                  overflow: "hidden",
+                  backgroundColor: banner.backgroundColor,
+                  padding: 18,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                 }}
-                resizeMode="cover"
-              />
+              >
+                <View className="flex-1 pr-3">
+                  <Text
+                    className="text-[10px] font-bold tracking-widest"
+                    style={{
+                      color:
+                        banner.id === "top-products" ? "#bbf7d0" : "#6b7280",
+                    }}
+                  >
+                    {banner.eyebrow}
+                  </Text>
+                  <Text
+                    className="text-xl font-black mt-2"
+                    style={{
+                      color:
+                        banner.id === "top-products" ? "#ffffff" : "#14532d",
+                    }}
+                  >
+                    {banner.title}
+                  </Text>
+                  <Text
+                    className="text-xs mt-1 leading-4"
+                    style={{
+                      color:
+                        banner.id === "top-products" ? "#dcfce7" : "#4b5563",
+                    }}
+                  >
+                    {banner.description}
+                  </Text>
+                  <View className="flex-row items-center mt-3">
+                    <Text
+                      className="font-bold text-xs mr-1"
+                      style={{
+                        color:
+                          banner.id === "top-products" ? "#ffffff" : "#14532d",
+                      }}
+                    >
+                      View list
+                    </Text>
+                    <MaterialCommunityIcons
+                      name="arrow-right"
+                      size={15}
+                      color={
+                        banner.id === "top-products" ? "#ffffff" : "#14532d"
+                      }
+                    />
+                  </View>
+                </View>
+                <View
+                  className="w-16 h-16 rounded-full items-center justify-center"
+                  style={{ backgroundColor: banner.iconBackground }}
+                >
+                  <MaterialCommunityIcons
+                    name={banner.icon as any}
+                    size={32}
+                    color={banner.iconColor}
+                  />
+                </View>
+              </TouchableOpacity>
             ))}
           </ScrollView>
-
-          <View style={{ flexDirection: "row", justifyContent: "center", gap: 5, marginTop: 8 }}>
-            {BANNERS.map((_, i) => (
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "center",
+              gap: 5,
+              marginTop: 8,
+            }}
+          >
+            {BANNERS.map((banner, index) => (
               <View
-                key={i}
+                key={banner.id}
                 style={{
-                  width: bannerIdx === i ? 18 : 5,
+                  width: bannerIdx === index ? 18 : 5,
                   height: 5,
                   borderRadius: 10,
-                  backgroundColor: bannerIdx === i ? "#14532d" : "#d1d5db",
+                  backgroundColor: bannerIdx === index ? "#14532d" : "#d1d5db",
                 }}
               />
             ))}
@@ -218,50 +321,72 @@ export default function Home() {
         <View className="px-4">
           {/* ── ACTIVE ORDER ── */}
           {activeOrder && (
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() =>
-                router.push({
-                  pathname: "/buyer/profile/order-details",
-                  params: { orderId: activeOrder.id },
-                })
-              }
-              className="bg-amber-50 border border-amber-200 rounded-[10px] p-4 flex-row items-center mb-5"
-              style={{ elevation: 2 }}
-            >
-              <View className="bg-white w-10 h-10 rounded-[5px] items-center justify-center mr-3">
-                <MaterialCommunityIcons name="bike" size={20} color="#b45309" />
-              </View>
-              <View className="flex-1">
-                <Text className="text-amber-700 text-[11px] font-bold">
+            <View className="mb-5">
+              <View className="flex-row items-center justify-between mb-2">
+                <Text className="text-gray-800 font-bold text-base">
                   Order in progress
                 </Text>
-                <Text
-                  className="text-gray-800 font-semibold text-sm mt-0.5"
-                  numberOfLines={1}
-                >
-                  {activeOrder.farmName} ·{" "}
-                  {activeOrder.status === "pending" ? "Waiting for farmer" : "Preparing"}
-                </Text>
+                {activeOrders.length > 1 && (
+                  <TouchableOpacity
+                    onPress={() => setShowOtherOrders((visible) => !visible)}
+                    className="flex-row items-center px-2 py-1"
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      showOtherOrders ? "Hide other active orders" : "Show other active orders"
+                    }
+                  >
+                    <Text className="text-xs font-semibold mr-1" style={{ color: "#14532d" }}>
+                      {showOtherOrders
+                        ? "Hide other orders"
+                        : `Other orders (${activeOrders.length - 1})`}
+                    </Text>
+                    <MaterialCommunityIcons
+                      name={showOtherOrders ? "chevron-up" : "chevron-down"}
+                      size={18}
+                      color="#14532d"
+                    />
+                  </TouchableOpacity>
+                )}
               </View>
-              <MaterialCommunityIcons name="chevron-right" size={18} color="#9ca3af" />
-            </TouchableOpacity>
-          )}
 
-          {/* ── RESALE (conditional - hidden until defined) ── */}
-          {resaleProducts.length > 0 && (
-            <View className="mb-6">
-              <Text className="text-gray-800 font-bold text-base mb-3">
-                Resale products
-              </Text>
-              <FlatList
-                data={resaleProducts}
-                scrollEnabled={false}
-                numColumns={2}
-                keyExtractor={(item, index) => item.docId ?? index.toString()}
-                columnWrapperStyle={{ justifyContent: "space-between" }}
-                renderItem={({ item }) => <ProductCard item={item} />}
-              />
+              <View className="bg-white rounded-[10px] border border-gray-100 px-3">
+                {(showOtherOrders ? activeOrders : [activeOrder]).map(
+                  (order, index) => (
+                    <TouchableOpacity
+                      key={order.id || `active-order-${index}`}
+                      onPress={() => openOrder(order)}
+                      className={`flex-row items-center justify-between py-3 ${
+                        index !== 0 ? "border-t border-gray-100" : ""
+                      }`}
+                    >
+                      <View className="flex-1 mr-3">
+                        <Text
+                          className="font-semibold text-sm text-gray-800"
+                          numberOfLines={1}
+                        >
+                          {order.farmName || "Farm"}
+                        </Text>
+                        <Text className="text-gray-500 text-xs mt-1">
+                          ₱{Number(order.total || 0).toFixed(2)}
+                        </Text>
+                      </View>
+                      <Text
+                        className="font-semibold text-xs"
+                        style={{
+                          color:
+                            order.status === "pending"
+                              ? "#D97706"
+                              : "#14532d",
+                        }}
+                      >
+                        {order.status === "pending"
+                          ? "Pending"
+                          : "Processing"}
+                      </Text>
+                    </TouchableOpacity>
+                  )
+                )}
+              </View>
             </View>
           )}
 
@@ -354,57 +479,6 @@ export default function Home() {
           )}
         </View>
       </ScrollView>
-
-      {/* ── QUICK SEARCH DROPDOWN ── */}
-      {searchQuery.trim().length > 0 && (
-        <>
-          <TouchableOpacity
-            onPress={closeSearch}
-            activeOpacity={1}
-            className="absolute inset-0"
-            style={{ backgroundColor: "rgba(0,0,0,0.15)" }}
-          />
-          <View
-            className="absolute left-4 right-4 bg-white rounded-2xl overflow-hidden"
-            style={{
-              top: 118,
-              maxHeight: 280,
-              elevation: 8,
-              shadowColor: "#000",
-              shadowOpacity: 0.12,
-              shadowRadius: 10,
-            }}
-          >
-            {searchResults.length === 0 ? (
-              <View className="py-4 items-center">
-                <Text className="text-gray-400 text-xs">
-                  No results for "{searchQuery}"
-                </Text>
-              </View>
-            ) : (
-              <ScrollView keyboardShouldPersistTaps="handled">
-                {searchResults.map((item, idx) => (
-                  <TouchableOpacity
-                    key={item.docId}
-                    onPress={() => goToProduct(item.docId!)}
-                    activeOpacity={0.7}
-                    className={`px-4 py-3 ${
-                      idx < searchResults.length - 1 ? "border-b border-gray-100" : ""
-                    }`}
-                  >
-                    <Text className="text-gray-900 text-sm" numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                    <Text className="text-gray-400 text-[11px] mt-0.5" numberOfLines={1}>
-                      {item.farmName}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-          </View>
-        </>
-      )}
     </View>
   );
 }

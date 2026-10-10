@@ -1,12 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import {
-    Ionicons,
-} from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import {
     useRouter,
 } from "expo-router";
+import { useToast } from "../../../context/ToastContext";
+import { formatPhilippinePhoneNumber } from "../../../utils/validators";
 
 import React, {
     useEffect,
@@ -14,7 +14,6 @@ import React, {
 } from "react";
 
 import {
-    Alert,
     Image,
     Text,
     TouchableOpacity,
@@ -22,7 +21,9 @@ import {
     TextInput,
     Modal,
     ActivityIndicator,
+    ScrollView,
 } from "react-native";
+import { useFarmerAlert } from "@/context/FarmerAlertContext";
 
 import * as ImagePicker
     from "expo-image-picker";
@@ -51,8 +52,10 @@ import {
 } from "../../../src/services/deleteImageService";
 
 const AccountSetting = () => {
+    const Alert = useFarmerAlert();
 
     const router = useRouter();
+    const { showToast } = useToast();
 
     const auth = getAuth();
 
@@ -70,6 +73,20 @@ const AccountSetting = () => {
 
     const [newPassword, setNewPassword] =
         useState("");
+    const [currentPasswordError, setCurrentPasswordError] =
+        useState("");
+    const [newPasswordError, setNewPasswordError] =
+        useState("");
+    const [showCurrentPassword, setShowCurrentPassword] =
+        useState(false);
+    const [showNewPassword, setShowNewPassword] =
+        useState(false);
+    const [editingPhone, setEditingPhone] =
+        useState(false);
+    const [phoneDraft, setPhoneDraft] =
+        useState("");
+    const [savingPhone, setSavingPhone] =
+        useState(false);
 
     // ================= LOAD USER =================
     useEffect(() => {
@@ -91,6 +108,45 @@ const AccountSetting = () => {
         loadUser();
 
     }, []);
+
+    const handleSavePhone = async () => {
+        const enteredPhone = phoneDraft.trim();
+        if (!/^(09\d{9}|\+639\d{9})$/.test(enteredPhone)) {
+            showToast("Enter a valid Philippine mobile number, such as +639XXXXXXXXX.");
+            return;
+        }
+        const phone = enteredPhone.startsWith("09")
+            ? `+63${enteredPhone.slice(1)}`
+            : enteredPhone;
+
+        const userId = user?.uid || user?.userId || user?.id;
+        if (!userId) {
+            showToast("User session not found.");
+            return;
+        }
+
+        try {
+            setSavingPhone(true);
+            await updateDoc(doc(db, "users", userId), { phone });
+
+            const updatedUser = { ...user, phone };
+            setUser(updatedUser);
+            setEditingPhone(false);
+            try {
+                await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
+            } catch (error) {
+                console.error("SYNC PHONE NUMBER TO STORAGE ERROR:", error);
+                showToast("Phone number saved, but local profile sync failed.");
+                return;
+            }
+            showToast("Phone number updated.");
+        } catch (error) {
+            console.error("UPDATE PHONE NUMBER ERROR:", error);
+            showToast("Failed to update phone number. Please try again.");
+        } finally {
+            setSavingPhone(false);
+        }
+    };
 
     // ================= PICK IMAGE =================
     const pickImage =
@@ -218,16 +274,16 @@ const AccountSetting = () => {
         async () => {
 
             try {
+                setCurrentPasswordError("");
+                setNewPasswordError("");
 
-                if (
-                    !currentPassword ||
-                    !newPassword
-                ) {
-
-                    Alert.alert(
-                        "Error",
-                        "Fill all fields"
-                    );
+                if (!currentPassword || !newPassword) {
+                    if (!currentPassword) {
+                        setCurrentPasswordError("Enter your current password.");
+                    }
+                    if (!newPassword) {
+                        setNewPasswordError("Enter a new password.");
+                    }
 
                     return;
                 }
@@ -236,10 +292,7 @@ const AccountSetting = () => {
                     newPassword
                 ) {
 
-                    Alert.alert(
-                        "Same Password",
-                        "New password must be different from current password."
-                    );
+                    setNewPasswordError("New password must be different from your current password.");
 
                     return;
                 }
@@ -248,10 +301,7 @@ const AccountSetting = () => {
                     newPassword.length < 6
                 ) {
 
-                    Alert.alert(
-                        "Error",
-                        "Password must be at least 6 characters"
-                    );
+                    setNewPasswordError("Password must be at least 6 characters.");
 
                     return;
                 }
@@ -261,10 +311,7 @@ const AccountSetting = () => {
 
                 if (!firebaseUser) {
 
-                    Alert.alert(
-                        "Error",
-                        "User not found"
-                    );
+                    showToast("User not found.");
 
                     return;
                 }
@@ -287,64 +334,89 @@ const AccountSetting = () => {
                     newPassword
                 );
 
-                Alert.alert(
-                    "Success",
-                    "Password changed successfully"
-                );
+                closePasswordModal();
+                showToast("Password changed successfully.");
 
-                setModalVisible(false);
-
-                setCurrentPassword("");
-
-                setNewPassword("");
-
-            } catch (error: any) {
+            } catch (error: unknown) {
 
                 console.log(error);
 
-                Alert.alert(
-                    "Error",
-                    error.message
+                const errorCode =
+                    typeof error === "object" && error !== null && "code" in error
+                        ? error.code
+                        : undefined;
+
+                if (errorCode === "auth/invalid-credential" || errorCode === "auth/wrong-password") {
+                    setCurrentPasswordError("Current password is incorrect.");
+                    return;
+                }
+
+                if (errorCode === "auth/weak-password") {
+                    setNewPasswordError("Choose a stronger password.");
+                    return;
+                }
+
+                showToast(
+                    error instanceof Error
+                        ? error.message
+                        : "Failed to change password. Please try again."
                 );
             }
         };
 
+    const closePasswordModal = () => {
+        setModalVisible(false);
+        setCurrentPassword("");
+        setNewPassword("");
+        setCurrentPasswordError("");
+        setNewPasswordError("");
+        setShowCurrentPassword(false);
+        setShowNewPassword(false);
+    };
+
     return (
-        <View className="flex-1 bg-green-700">
+        <View className="flex-1 bg-white">
 
             {/* HEADER */}
-            <View className="bg-green-700 px-6 py-4 pt-16 flex-row items-center">
+            <View className="flex-row items-center bg-green-900 px-5 pb-4 pt-14">
 
                 <TouchableOpacity
                     onPress={() =>
                         router.back()
                     }
+                    accessibilityRole="button"
+                    accessibilityLabel="Go back"
                 >
 
-                    <Ionicons
-                        name="arrow-back"
+                    <MaterialCommunityIcons
+                        name="arrow-left"
                         size={24}
                         color="white"
                     />
 
                 </TouchableOpacity>
 
-                <Text className="text-white text-2xl font-bold ml-5">
+                <Text className="ml-4 text-lg font-bold text-white">
                     Account Settings
                 </Text>
 
             </View>
 
             {/* BODY */}
-            <View className="flex-1 bg-white rounded-t-[40px] px-6 pt-8">
+            <ScrollView
+                className="flex-1"
+                contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+                showsVerticalScrollIndicator={false}
+            >
 
                 {/* PROFILE IMAGE */}
-                <View className="items-center mb-8">
+                <View className="mb-8 items-center">
 
                     <TouchableOpacity
                         onPress={pickImage}
                         disabled={loading}
                         className="relative"
+                        activeOpacity={0.8}
                     >
 
                         {user?.profileImage ? (
@@ -354,201 +426,303 @@ const AccountSetting = () => {
                                     uri:
                                         user.profileImage,
                                 }}
-                                className="w-32 h-32 rounded-full"
+                                className="h-28 w-28 rounded-full"
                             />
 
                         ) : (
 
-                            <View className="w-32 h-32 rounded-full bg-green-100 justify-center items-center">
+                            <View className="h-28 w-28 items-center justify-center rounded-full" style={{ backgroundColor: "#f0fdf4" }}>
 
-                                <Ionicons
-                                    name="person"
-                                    size={60}
-                                    color="#15803D"
+                                <MaterialCommunityIcons
+                                    name="account"
+                                    size={54}
+                                    color="#14532d"
                                 />
 
                             </View>
 
                         )}
 
-                        {/* CAMERA ICON */}
-                        <View className="absolute bottom-0 right-0 bg-green-700 p-2 rounded-full">
+                        {loading && (
+                            <View className="absolute inset-0 items-center justify-center rounded-full bg-black/40">
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                            </View>
+                        )}
 
-                            <Ionicons
-                                name="camera"
-                                size={18}
-                                color="white"
-                            />
-
-                        </View>
+                        {!loading && (
+                            <View className="absolute bottom-0 right-0 rounded-full border-2 border-white p-2" style={{ backgroundColor: "#14532d" }}>
+                                <MaterialCommunityIcons
+                                    name="camera"
+                                    size={16}
+                                    color="white"
+                                />
+                            </View>
+                        )}
 
                     </TouchableOpacity>
 
-                    <Text className="text-gray-500 mt-3">
-                        Tap to change profile
+                    <Text className="mt-3 text-xs text-gray-400">
+                        Tap to change profile photo
                     </Text>
-
-                    {loading && (
-
-                        <ActivityIndicator
-                            size="large"
-                            color="#15803D"
-                            className="mt-4"
-                        />
-
-                    )}
-
                 </View>
 
-                <Text className="text-gray-400 mb-6">
+                <Text className="mb-1 ml-1 text-xs font-semibold uppercase text-gray-400">
                     Account
                 </Text>
 
                 {/* FULL NAME */}
-                <View className="flex-row items-center justify-between bg-gray-100 p-4 rounded-xl mb-4">
+                <View className="flex-row items-center justify-between border-b border-gray-100 py-4">
 
-                    <View className="flex-row items-center">
+                    <View className="flex-1 flex-row items-center">
 
-                        <Ionicons
-                            name="person-circle-outline"
+                        <MaterialCommunityIcons
+                            name="account-circle-outline"
                             size={20}
-                            color="#15803d"
+                            color="#14532d"
                         />
 
-                        <Text className="ml-3 text-green-700 font-semibold">
+                        <Text className="ml-3 text-sm font-semibold text-gray-800">
                             Full Name
                         </Text>
 
                     </View>
 
-                    <Text className="text-gray-400">
-                        {user?.fullName || ""}
+                    <Text className="ml-3 flex-shrink text-sm text-gray-500" numberOfLines={1}>
+                        {user?.fullName || "—"}
                     </Text>
 
                 </View>
 
                 {/* EMAIL */}
-                <View className="flex-row items-center justify-between bg-gray-100 p-4 rounded-xl mb-4">
+                <View className="flex-row items-center justify-between border-b border-gray-100 py-4">
 
-                    <View className="flex-row items-center">
+                    <View className="flex-1 flex-row items-center">
 
-                        <Ionicons
-                            name="mail-outline"
+                        <MaterialCommunityIcons
+                            name="email-outline"
                             size={20}
-                            color="#15803d"
+                            color="#14532d"
                         />
 
-                        <Text className="ml-3 text-green-700 font-semibold">
+                        <Text className="ml-3 text-sm font-semibold text-gray-800">
                             Email
                         </Text>
 
                     </View>
 
-                    <Text className="text-gray-400">
-                        {user?.email || ""}
+                    <Text className="ml-3 flex-shrink text-sm text-gray-500" numberOfLines={1}>
+                        {user?.email || "—"}
                     </Text>
 
                 </View>
                 {/* PHONE */}
-                <View className="flex-row items-center justify-between bg-gray-100 p-4 rounded-xl mb-4">
+                <View className="border-b border-gray-100 py-4">
+                    <View className="flex-row items-center justify-between">
+                      <View className="flex-1 flex-row items-center">
 
-                    <View className="flex-row items-center">
-
-                        <Ionicons
-                            name="call-outline"
+                        <MaterialCommunityIcons
+                            name="phone-outline"
                             size={20}
-                            color="#15803d"
+                            color="#14532d"
                         />
 
-                        <Text className="ml-3 text-green-700 font-semibold">
+                        <Text className="ml-3 text-sm font-semibold text-gray-800">
                             Phone Number
                         </Text>
 
+                      </View>
+                      {!editingPhone && (
+                        <TouchableOpacity
+                          onPress={() => {
+                            setPhoneDraft(user?.phone || "");
+                            setEditingPhone(true);
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel="Edit phone number"
+                          className="px-2 py-1"
+                        >
+                          <Text className="text-sm font-semibold text-[#14532d]">Edit</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
 
-                    <Text className="text-gray-400">
-                        {user?.phone || ""}
-                    </Text>
-
+                    {editingPhone ? (
+                      <View className="mt-3">
+                        <TextInput
+                          value={phoneDraft}
+                          onChangeText={setPhoneDraft}
+                            placeholder="+639XXXXXXXXX"
+                          placeholderTextColor="#9CA3AF"
+                          keyboardType="phone-pad"
+                          autoComplete="tel"
+                          maxLength={13}
+                          editable={!savingPhone}
+                          className="rounded-[10px] border border-gray-200 bg-gray-50 px-3 py-3 text-gray-800"
+                        />
+                        <View className="mt-3 flex-row justify-end">
+                          <TouchableOpacity
+                            onPress={() => {
+                              setEditingPhone(false);
+                              setPhoneDraft("");
+                            }}
+                            disabled={savingPhone}
+                            className="mr-2 rounded-[10px] bg-gray-100 px-4 py-2.5"
+                          >
+                            <Text className="font-semibold text-gray-700">Cancel</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={handleSavePhone}
+                            disabled={savingPhone}
+                            className="min-w-[88px] items-center rounded-[10px] px-4 py-2.5"
+                            style={{ backgroundColor: "#14532d", opacity: savingPhone ? 0.7 : 1 }}
+                          >
+                            {savingPhone ? (
+                              <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : (
+                              <Text className="font-semibold text-white">Save</Text>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <Text className="ml-8 mt-2 text-sm text-gray-500" numberOfLines={1}>
+                        {user?.phone ? formatPhilippinePhoneNumber(user.phone) : "—"}
+                      </Text>
+                    )}
                 </View>
+
+                <Text className="mb-1 ml-1 mt-5 text-xs font-semibold uppercase text-gray-400">
+                    Security
+                </Text>
 
                 {/* CHANGE PASSWORD */}
                 <TouchableOpacity
-                    className="flex-row items-center justify-between bg-gray-100 p-4 rounded-xl mb-4"
-                    onPress={() =>
+                    className="flex-row items-center justify-between py-4"
+                    onPress={() => {
+                        setCurrentPasswordError("");
+                        setNewPasswordError("");
                         setModalVisible(true)
-                    }
+                    }}
+                    activeOpacity={0.7}
                 >
 
-                    <View className="flex-row items-center">
+                    <View className="flex-1 flex-row items-center">
 
-                        <Ionicons
-                            name="lock-closed-outline"
+                        <MaterialCommunityIcons
+                            name="lock-outline"
                             size={20}
-                            color="#15803d"
+                            color="#14532d"
                         />
 
-                        <Text className="ml-3 text-green-700 font-semibold">
+                        <Text className="ml-3 text-sm font-semibold text-gray-800">
                             Change Password
                         </Text>
 
                     </View>
 
-                    <Ionicons
-                        name="chevron-forward"
+                    <MaterialCommunityIcons
+                        name="chevron-right"
                         size={20}
-                        color="#15803d"
+                        color="#9ca3af"
                     />
 
                 </TouchableOpacity>
 
-            </View>
+            </ScrollView>
 
             {/* CHANGE PASSWORD MODAL */}
             <Modal
                 visible={modalVisible}
                 transparent
                 animationType="fade"
+                statusBarTranslucent
+                onRequestClose={closePasswordModal}
             >
 
                 <View className="flex-1 justify-center items-center bg-black/40 px-6">
 
-                    <View className="bg-white w-full rounded-3xl p-6">
+                    <View className="w-full rounded-[10px] bg-white p-6">
 
-                        <Text className="text-xl font-bold text-gray-800 mb-5">
+                        <Text className="mb-5 text-lg font-bold text-gray-800">
                             Change Password
                         </Text>
 
                         {/* CURRENT PASSWORD */}
-                        <TextInput
-                            placeholder="Current Password"
-                            secureTextEntry
-                            value={currentPassword}
-                            onChangeText={
-                                setCurrentPassword
-                            }
-                            className="bg-gray-100 rounded-xl px-4 py-4 mb-4"
-                        />
+                        <View className="mb-4">
+                            <View className={`flex-row items-center rounded-[10px] border bg-gray-50 px-4 ${currentPasswordError ? "border-red-500" : "border-gray-200"}`}>
+                                <TextInput
+                                    placeholder="Current Password"
+                                    placeholderTextColor="#9CA3AF"
+                                    secureTextEntry={!showCurrentPassword}
+                                    value={currentPassword}
+                                    onChangeText={(value) => {
+                                        setCurrentPassword(value);
+                                        setCurrentPasswordError("");
+                                    }}
+                                    className="flex-1 py-4 text-gray-800"
+                                    accessibilityHint={currentPasswordError || undefined}
+                                />
+                                <TouchableOpacity
+                                    onPress={() => setShowCurrentPassword((visible) => !visible)}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={showCurrentPassword ? "Hide current password" : "Show current password"}
+                                    className="ml-3 p-1"
+                                >
+                                    <MaterialCommunityIcons
+                                        name={showCurrentPassword ? "eye-off-outline" : "eye-outline"}
+                                        size={20}
+                                        color="#9CA3AF"
+                                    />
+                                </TouchableOpacity>
+                            </View>
+                            {currentPasswordError ? (
+                                <Text className="mt-1 px-1 text-xs text-red-600">
+                                    {currentPasswordError}
+                                </Text>
+                            ) : null}
+                        </View>
 
                         {/* NEW PASSWORD */}
-                        <TextInput
-                            placeholder="New Password"
-                            secureTextEntry
-                            value={newPassword}
-                            onChangeText={
-                                setNewPassword
-                            }
-                            className="bg-gray-100 rounded-xl px-4 py-4 mb-6"
-                        />
+                        <View className="mb-6">
+                            <View className={`flex-row items-center rounded-[10px] border bg-gray-50 px-4 ${newPasswordError ? "border-red-500" : "border-gray-200"}`}>
+                                <TextInput
+                                    placeholder="New Password"
+                                    placeholderTextColor="#9CA3AF"
+                                    secureTextEntry={!showNewPassword}
+                                    value={newPassword}
+                                    onChangeText={(value) => {
+                                        setNewPassword(value);
+                                        setNewPasswordError("");
+                                    }}
+                                    className="flex-1 py-4 text-gray-800"
+                                    accessibilityHint={newPasswordError || undefined}
+                                />
+                                <TouchableOpacity
+                                    onPress={() => setShowNewPassword((visible) => !visible)}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={showNewPassword ? "Hide new password" : "Show new password"}
+                                    className="ml-3 p-1"
+                                >
+                                    <MaterialCommunityIcons
+                                        name={showNewPassword ? "eye-off-outline" : "eye-outline"}
+                                        size={20}
+                                        color="#9CA3AF"
+                                    />
+                                </TouchableOpacity>
+                            </View>
+                            {newPasswordError ? (
+                                <Text className="mt-1 px-1 text-xs text-red-600">
+                                    {newPasswordError}
+                                </Text>
+                            ) : null}
+                        </View>
 
                         <View className="flex-row">
 
                             {/* CANCEL */}
                             <TouchableOpacity
-                                className="flex-1 bg-gray-200 py-4 rounded-xl mr-2 items-center"
-                                onPress={() =>
-                                    setModalVisible(false)
-                                }
+                                className="mr-2 flex-1 items-center rounded-[5px] bg-gray-200 py-3.5"
+                                onPress={closePasswordModal}
                             >
 
                                 <Text className="font-semibold text-gray-700">
@@ -559,7 +733,8 @@ const AccountSetting = () => {
 
                             {/* SAVE */}
                             <TouchableOpacity
-                                className="flex-1 bg-green-700 py-4 rounded-xl ml-2 items-center"
+                                className="ml-2 flex-1 items-center rounded-[5px] py-3.5"
+                                style={{ backgroundColor: "#14532d" }}
                                 onPress={
                                     handleChangePassword
                                 }

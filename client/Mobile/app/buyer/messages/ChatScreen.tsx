@@ -1,7 +1,8 @@
-import { Ionicons } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
+
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -10,16 +11,18 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Image,
 } from "react-native";
 import {
   createChatId,
   listenMessages,
+  markChatRead,
   sendMessage,
 } from "../../../src/services/chatService";
 
 const BuyerChatScreen = () => {
   const router = useRouter();
-  const { farmerId, farmerName } = useLocalSearchParams();
+  const { farmerId, farmerName, farmerProfileImage } = useLocalSearchParams();
 
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState("");
@@ -43,7 +46,14 @@ const BuyerChatScreen = () => {
         setChatId(id);
 
         // ✅ store unsubscribe
-        unsubscribe = listenMessages(id, setMessages);
+        unsubscribe = listenMessages(id, (newMessages) => {
+          setMessages(newMessages);
+          if (newMessages.length > 0) {
+            void markChatRead(id, user.uid).catch((error) =>
+              console.error("MARK OPEN CHAT READ ERROR:", error)
+            );
+          }
+        });
       } catch (error) {
         console.log(error);
       }
@@ -54,7 +64,7 @@ const BuyerChatScreen = () => {
     return () => {
       if (unsubscribe) unsubscribe(); // ✅ cleanup
     };
-  }, []);
+  }, [farmerId]);
 
   const handleSend = async () => {
     if (!text.trim() || !chatId || !buyerId) return;
@@ -71,26 +81,34 @@ const BuyerChatScreen = () => {
 
   return (
     <KeyboardAvoidingView
-      className="flex-1 bg-green-700"
+      className="flex-1 bg-white"
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       {/* HEADER */}
-      <View className="bg-green-700 px-6 pt-16 pb-4 flex-row items-center">
+      <View className="bg-green-900 pt-14 pb-4 px-5 rounded-b-2xl flex-row items-center">
         <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="white" />
+          <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
         </TouchableOpacity>
 
-        <View className="w-10 h-10 rounded-full bg-green-200 items-center justify-center ml-3">
-          <Ionicons name="person" size={20} color="#15803d" />
+        <View className="w-10 h-10 rounded-full overflow-hidden items-center justify-center ml-3" style={{ backgroundColor: "#f0fdf4" }}>
+          {farmerProfileImage ? (
+            <Image
+              source={{ uri: String(farmerProfileImage) }}
+              style={{ width: "100%", height: "100%" }}
+              resizeMode="cover"
+            />
+          ) : (
+            <MaterialCommunityIcons name="account" size={20} color="#14532d" />
+          )}
         </View>
 
-        <Text className="text-white text-xl font-bold ml-3">
+        <Text className="text-white text-lg font-bold ml-3">
           {farmerName || "Farmer"}
         </Text>
       </View>
 
       {/* CHAT */}
-      <View className="flex-1 bg-gray-100 rounded-t-[30px] px-4 pt-4">
+      <View className="flex-1 bg-gray-50 px-4 pt-4">
         <FlatList
           ref={flatListRef}
           data={messages}
@@ -101,8 +119,8 @@ const BuyerChatScreen = () => {
           }
           ListEmptyComponent={
             <View className="items-center mt-20">
-              <Ionicons
-                name="chatbubble-outline"
+              <MaterialCommunityIcons
+                name="chat-outline"
                 size={50}
                 color="#d1d5db"
               />
@@ -122,10 +140,9 @@ const BuyerChatScreen = () => {
               >
                 <View
                   className={`px-4 py-2 rounded-2xl max-w-[75%] ${
-                    isMe
-                      ? "bg-green-600 rounded-br-none"
-                      : "bg-white rounded-bl-none"
+                    isMe ? "rounded-br-none" : "bg-white rounded-bl-none"
                   }`}
+                  style={isMe ? { backgroundColor: "#14532d" } : undefined}
                 >
                   <Text
                     className={
@@ -168,9 +185,10 @@ const BuyerChatScreen = () => {
           />
           <TouchableOpacity
             onPress={handleSend}
-            className="bg-green-600 p-3 rounded-full"
+            className="p-3 rounded-full"
+            style={{ backgroundColor: "#14532d" }}
           >
-            <Ionicons name="send" size={18} color="white" />
+            <MaterialCommunityIcons name="send" size={18} color="white" />
           </TouchableOpacity>
         </View>
       </View>

@@ -622,6 +622,11 @@ export const updateProductInfo = async (
       image: product.image,
       imagePublicId:
         product.imagePublicId,
+      images: product.images || [product.image],
+      imagePublicIds:
+        product.imagePublicIds || [product.imagePublicId],
+      video: product.video || "",
+      videoPublicId: product.videoPublicId || "",
     });
   } catch (error) {
     console.log(
@@ -1439,7 +1444,8 @@ export const getReviewsByBatch = async (
 export const subscribeToProducts = (
   callback: (
     products: ProductType[]
-  ) => void
+  ) => void,
+  onError?: (error: Error) => void
 ) => {
   const q = query(
     productCollection,
@@ -1464,11 +1470,12 @@ export const subscribeToProducts = (
 
       callback(products);
     },
-    (error) =>
-      console.log(
-        "REALTIME ERROR:",
-        error
-      )
+    onError ||
+      ((error) =>
+        console.log(
+          "REALTIME ERROR:",
+          error
+        ))
   );
 };
 

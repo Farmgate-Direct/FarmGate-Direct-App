@@ -13,12 +13,12 @@ import React, {
 } from "react";
 
 import {
-  Alert,
   Modal,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { useToast } from "@/context/ToastContext";
 
 import QRCode from "react-native-qrcode-svg";
 
@@ -27,6 +27,7 @@ import ViewShot from "react-native-view-shot";
 import * as MediaLibrary from "expo-media-library";
 
 const QR = () => {
+  const { showToast } = useToast();
 
   const { uid } =
     useLocalSearchParams();
@@ -53,10 +54,7 @@ const QR = () => {
           !permission.granted
         ) {
 
-          Alert.alert(
-            "Permission Denied",
-            "Allow gallery access first."
-          );
+          showToast("Permission denied. Allow gallery access first.");
 
           return;
         }
@@ -70,28 +68,22 @@ const QR = () => {
           uri
         );
 
-        Alert.alert(
-          "Success",
-          "QR Code saved to gallery."
-        );
+        showToast("QR Code saved to gallery.");
 
       } catch (error) {
 
         console.log(error);
 
-        Alert.alert(
-          "Error",
-          "Failed to save QR Code."
-        );
+        showToast("Failed to save QR Code.");
       }
     };
 
   return (
 
-    <View className="flex-1 bg-green-700">
+    <View className="flex-1 bg-[#f5f5f5]">
 
       {/* HEADER */}
-      <View className="bg-green-700 px-6 py-4 pt-16 flex-row items-center justify-between">
+      <View className="flex-row items-center px-5 pb-4 pt-14" style={{ backgroundColor: "#14532d" }}>
 
         {/* LEFT */}
         <View className="flex-row items-center">
@@ -100,6 +92,7 @@ const QR = () => {
             onPress={() =>
               router.back()
             }
+            className="h-10 w-10 items-center justify-center"
           >
 
             <Ionicons
@@ -110,7 +103,7 @@ const QR = () => {
 
           </TouchableOpacity>
 
-          <Text className="text-white text-[25px] font-bold ml-3">
+          <Text className="ml-4 text-lg font-bold text-white">
 
             QR Code
 
@@ -123,11 +116,14 @@ const QR = () => {
           onPress={() =>
             setModalVisible(true)
           }
+          accessibilityRole="button"
+          accessibilityLabel="How to use QR code"
+          className="h-10 w-10 items-center justify-center"
         >
 
           <Ionicons
             name="help-circle-outline"
-            size={35}
+            size={24}
             color="white"
           />
 
@@ -136,7 +132,17 @@ const QR = () => {
       </View>
 
       {/* BODY */}
-      <View className="flex-1 bg-white rounded-t-[40px] px-6 justify-center items-center">
+      <View className="flex-1 items-center justify-center px-5 py-6">
+        <View
+          className="w-full items-center rounded-[10px] border border-gray-100 bg-white px-5 py-6"
+          style={{ transform: [{ translateY: -28 }] }}
+        >
+          <Text className="mb-2 text-lg font-bold text-gray-900">
+            Your Farm QR Code
+          </Text>
+          <Text className="mb-5 text-center text-sm text-gray-500">
+            Buyers can scan this code to view your farm profile.
+          </Text>
 
         {/* QR */}
         <ViewShot
@@ -147,7 +153,7 @@ const QR = () => {
           }}
         >
 
-          <View className="border-4 border-green-600 p-5 rounded-2xl bg-white">
+          <View className="rounded-[10px] border border-gray-200 bg-white p-4">
 
             <QRCode
               value={`client://farm/${uid}`}
@@ -161,26 +167,19 @@ const QR = () => {
         {/* DOWNLOAD */}
         <TouchableOpacity
           onPress={handleDownload}
-          className="bg-green-700 px-10 py-3 rounded-xl mt-8"
+          className="mt-6 w-full flex-row items-center justify-center rounded-[10px] px-5 py-3.5"
+          style={{ backgroundColor: "#14532d" }}
         >
 
-          <Text className="text-white font-semibold">
+          <Ionicons name="download-outline" size={19} color="white" />
+          <Text className="ml-2 font-semibold text-white">
 
             Download
 
           </Text>
 
         </TouchableOpacity>
-
-        {/* INFO */}
-        <Text className="text-center text-gray-600 mt-6 px-4">
-
-          Download your QR code and
-          place it at your farm gate
-          or stall so buyers can scan
-          and view your farm profile.
-
-        </Text>
+        </View>
 
       </View>
 
@@ -189,37 +188,39 @@ const QR = () => {
         transparent
         visible={modalVisible}
         animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setModalVisible(false)}
       >
 
-        <View className="flex-1 bg-black/40 justify-center items-center px-6">
+        <View className="flex-1 items-center justify-center bg-black/40 px-6">
 
-          <View className="bg-white rounded-2xl p-6 w-full">
+          <View className="w-full rounded-[10px] bg-white p-6">
 
-            <Text className="text-lg font-bold text-green-700 mb-4">
+            <Text className="mb-4 text-lg font-bold text-gray-900">
 
               How to Use QR Code
 
             </Text>
 
-            <Text className="text-gray-600 mb-2">
+            <Text className="mb-2 text-sm text-gray-600">
 
               1. Tap Download button.
 
             </Text>
 
-            <Text className="text-gray-600 mb-2">
+            <Text className="mb-2 text-sm text-gray-600">
 
               2. Save QR code to your device.
 
             </Text>
 
-            <Text className="text-gray-600 mb-2">
+            <Text className="mb-2 text-sm text-gray-600">
 
               3. Print the QR code.
 
             </Text>
 
-            <Text className="text-gray-600 mb-4">
+            <Text className="mb-5 text-sm text-gray-600">
 
               4. Place it at your farm
               gate or selling area so
@@ -231,7 +232,8 @@ const QR = () => {
               onPress={() =>
                 setModalVisible(false)
               }
-              className="bg-green-700 py-3 rounded-xl"
+              className="rounded-[10px] py-3.5"
+              style={{ backgroundColor: "#14532d" }}
             >
 
               <Text className="text-white text-center font-semibold">

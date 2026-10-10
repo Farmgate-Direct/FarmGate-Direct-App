@@ -10,6 +10,7 @@ export type UserType = {
   status: string;
 
   farmName?: string;
+  street?: string;
   barangay?: string;
   municipality?: string;
   province?: string;

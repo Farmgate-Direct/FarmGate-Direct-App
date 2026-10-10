@@ -27,10 +27,9 @@ const DARK_GREEN = "#14532d";
 // NOTE: icon names below use Ionicons (matching the old version's icon
 // set) instead of MaterialCommunityIcons.
 const SORT_OPTIONS = [
-  { label: "Relevance", icon: "options-outline" },
+  { label: "All", icon: "options-outline" },
   { label: "Highest Rated", icon: "star-outline" },
   { label: "Best Selling", icon: "flame-outline" },
-  { label: "Resell", icon: "repeat" },
 ];
 
 const CATEGORY_OPTIONS = ["All", "Vegetables", "Fruits", "Egg & Poultry", "Rice & Grains"];
@@ -46,7 +45,7 @@ const FarmProfile = () => {
   const [isFavorited, setIsFavorited] = useState(false);
 
   const [activeCategory, setActiveCategory] = useState("All");
-  const [sortBy, setSortBy] = useState("Relevance");
+  const [sortBy, setSortBy] = useState("All");
   const [sortDropdownVisible, setSortDropdownVisible] = useState(false);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, right: 0 });
   const sortButtonRef = useRef<View>(null);
@@ -154,7 +153,7 @@ const FarmProfile = () => {
         keyExtractor={(item, index) => item.docId ?? index.toString()}
         numColumns={2}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingBottom: 112 }}
         columnWrapperStyle={{ justifyContent: "space-between", paddingHorizontal: 14 }}
         ListHeaderComponent={
           <>
@@ -193,7 +192,12 @@ const FarmProfile = () => {
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
                     <Ionicons name="location" size={13} color={DARK_GREEN} />
                     <Text style={{ fontSize: 12, color: "#6b7280" }}>
-                      {[farmerUser?.municipality, farmerUser?.province].filter(Boolean).join(", ") || "Location not set"}
+                      {[
+                        farmerUser?.street,
+                        farmerUser?.barangay,
+                        farmerUser?.municipality,
+                        farmerUser?.province,
+                      ].filter(Boolean).join(", ") || "Location not set"}
                     </Text>
                   </View>
                 </View>
@@ -289,13 +293,10 @@ const FarmProfile = () => {
                 <TouchableOpacity
                   ref={sortButtonRef}
                   onPress={() => (sortDropdownVisible ? setSortDropdownVisible(false) : openSortDropdown())}
-                  style={{
-                    flexDirection: "row", alignItems: "center",
-                    backgroundColor: "white", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
-                  }}
+                  className="flex-row items-center bg-white px-3 py-1.5 rounded-full"
                 >
                   <Ionicons name="swap-vertical" size={14} color="#6b7280" />
-                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#6b7280", marginLeft: 4 }}>
+                  <Text className="text-gray-500 text-xs font-semibold ml-1">
                     Sort: {sortBy}
                   </Text>
                   <Ionicons
@@ -351,6 +352,7 @@ const FarmProfile = () => {
         visible={sortDropdownVisible}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setSortDropdownVisible(false)}
       >
         <TouchableOpacity
@@ -359,15 +361,17 @@ const FarmProfile = () => {
           onPress={() => setSortDropdownVisible(false)}
         >
           <View
+            className="absolute bg-white rounded-[14px] py-1.5"
             style={{
-              position: "absolute",
               top: dropdownPos.top,
               right: dropdownPos.right,
               width: 180,
-              backgroundColor: "white", borderRadius: 14, paddingVertical: 6,
-              borderWidth: 1, borderColor: "#f3f4f6",
-              shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.12, shadowRadius: 10, elevation: 8,
+              overflow: "hidden",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.12,
+              shadowRadius: 10,
+              elevation: 8,
             }}
           >
             {SORT_OPTIONS.map((opt) => {
@@ -379,19 +383,25 @@ const FarmProfile = () => {
                     setSortBy(opt.label);
                     setSortDropdownVisible(false);
                   }}
-                  style={{
-                    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-                    paddingVertical: 10, paddingHorizontal: 14,
-                    backgroundColor: active ? "#f0fdf4" : "transparent",
-                  }}
+                  className={`flex-row items-center justify-between px-3.5 py-2.5 ${
+                    active ? "bg-green-50" : ""
+                  }`}
                 >
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <Ionicons name={opt.icon as any} size={16} color={active ? DARK_GREEN : "#6b7280"} />
-                    <Text style={{ fontSize: 12, fontWeight: "600", color: active ? DARK_GREEN : "#374151" }}>
+                  <View className="flex-row items-center gap-2">
+                    <Ionicons
+                      name={opt.icon as any}
+                      size={16}
+                      color={active ? "#14532d" : "#6b7280"}
+                    />
+                    <Text
+                      className={`text-xs font-semibold ${
+                        active ? "text-green-900" : "text-gray-700"
+                      }`}
+                    >
                       {opt.label}
                     </Text>
                   </View>
-                  {active && <Ionicons name="checkmark-circle" size={16} color={DARK_GREEN} />}
+                  {active && <Ionicons name="checkmark-circle" size={16} color="#14532d" />}
                 </TouchableOpacity>
               );
             })}

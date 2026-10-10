@@ -14,7 +14,6 @@ import React, {
 
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   Text,
@@ -22,6 +21,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useFarmerAlert } from "@/context/FarmerAlertContext";
+import { useToast } from "@/context/ToastContext";
 
 import {
   declineOrder,
@@ -30,14 +31,12 @@ import {
   acceptOrder,
   cancelAcceptedOrderByFarmer,
 } from "@/src/services/orderService";
-
-import {
-  calculateCommission,
-  recordCODCommission,
-} from "@/src/services/walletService";
+import { formatPhilippinePhoneNumber } from "@/utils/validators";
 
 export default function OrderDetails() {
   const router = useRouter();
+  const Alert = useFarmerAlert();
+  const { showToast } = useToast();
 
   const { id } =
     useLocalSearchParams();
@@ -133,6 +132,7 @@ export default function OrderDetails() {
       case "processing": return "Processing";
       case "to_receive": return "To Receive";
       case "delivered": return "Delivered";
+      case "claimed": return "Claimed";
       case "cancelled": return "Cancelled";
       default: return status;
     }
@@ -158,10 +158,7 @@ export default function OrderDetails() {
           error
         );
 
-        Alert.alert(
-          "Error",
-          "Failed to load order."
-        );
+        showToast("Failed to load order.");
       } finally {
         setLoading(false);
       }
@@ -208,7 +205,7 @@ export default function OrderDetails() {
       if (!order?.id) return;
 
       if (!farmerId) {
-        Alert.alert("Error", "Farmer not found.");
+        showToast("Farmer not found.");
         return;
       }
 
@@ -217,15 +214,14 @@ export default function OrderDetails() {
       await acceptOrder(order.id, farmerId);
       await loadOrder();
 
-      Alert.alert(
-        "Order Accepted",
+      showToast(
         order.payment === "gcash"
-          ? "The order is accepted. The buyer can now pay with GCash."
-          : "The order is accepted. Stock will be deducted when you start processing the order."
+          ? "Order accepted. The buyer can now pay with GCash."
+          : "Order accepted. Stock will be deducted when processing starts."
       );
     } catch (error: any) {
       console.log("ACCEPT ORDER ERROR:", error);
-      Alert.alert("Error", error?.message || "Failed to accept order.");
+      showToast(error?.message || "Failed to accept order.");
     } finally {
       setActionLoading(false);
     }
@@ -237,7 +233,7 @@ export default function OrderDetails() {
       if (!order?.id) return;
 
       if (!farmerId) {
-        Alert.alert("Error", "Farmer not found.");
+        showToast("Farmer not found.");
         return;
       }
 
@@ -245,10 +241,10 @@ export default function OrderDetails() {
       await updateOrderStatus(order.id, farmerId, "processing");
       await loadOrder();
 
-      Alert.alert("Order Processing", "The order is now being prepared.");
+      showToast("Order is now being prepared.");
     } catch (error: any) {
       console.log("PROCESS ORDER ERROR:", error);
-      Alert.alert("Error", error?.message || "Failed to mark the order as processing.");
+      showToast(error?.message || "Failed to mark the order as processing.");
     } finally {
       setActionLoading(false);
     }
@@ -260,7 +256,7 @@ export default function OrderDetails() {
       if (!order?.id) return;
 
       if (!farmerId) {
-        Alert.alert("Error", "Farmer not found.");
+        showToast("Farmer not found.");
         return;
       }
 
@@ -268,10 +264,10 @@ export default function OrderDetails() {
       await updateOrderStatus(order.id, farmerId, "to_receive");
       await loadOrder();
 
-      Alert.alert("Order Ready", "The order is now marked as To Receive.");
+      showToast("Order marked as To Receive.");
     } catch (error: any) {
       console.log("TO RECEIVE ERROR:", error);
-      Alert.alert("Error", error?.message || "Failed to mark the order as To Receive.");
+      showToast(error?.message || "Failed to mark the order as To Receive.");
     } finally {
       setActionLoading(false);
     }
@@ -283,37 +279,31 @@ export default function OrderDetails() {
       if (!order?.id) return;
 
       if (!farmerId) {
-        Alert.alert("Error", "Farmer not found.");
+        showToast("Farmer not found.");
         return;
       }
 
       setActionLoading(true);
-      await updateOrderStatus(order.id, farmerId, "delivered");
-
-      if (order.payment === "cod" && order.commissionStatus !== "charged") {
-        const commission = calculateCommission(Number(order.total));
-
-        if (commission > 0) {
-          await recordCODCommission(
-            farmerId,
-            commission,
-            order.id,
-            order.orderNumber
-          );
-        }
-      }
-
+      const isPickup = order.delivery === "pickup";
+      await updateOrderStatus(
+        order.id,
+        farmerId,
+        isPickup ? "claimed" : "delivered"
+      );
       await loadOrder();
 
-      Alert.alert(
-        "Order Delivered",
-        order.payment === "cod"
-          ? "Order delivered and COD commission was recorded."
-          : "The order has been marked as delivered."
+      showToast(
+        isPickup
+          ? order.payment === "cod"
+            ? "Order claimed. COD commission was recorded."
+            : "Order claimed and farmer wallet updated."
+          : order.payment === "cod"
+            ? "Order delivered. COD commission and delivery deductions were recorded."
+            : "Order delivered and farmer wallet updated."
       );
     } catch (error: any) {
       console.log("DELIVERED ORDER ERROR:", error);
-      Alert.alert("Error", error?.message || "Failed to complete the order.");
+      showToast(error?.message || "Failed to complete the order.");
     } finally {
       setActionLoading(false);
     }
@@ -331,10 +321,7 @@ export default function OrderDetails() {
   const continueCancel =
     () => {
       if (!selectedReason) {
-        Alert.alert(
-          "Reason Required",
-          "Please select a reason."
-        );
+        showToast("Please select a cancellation reason.");
         return;
       }
 
@@ -343,10 +330,7 @@ export default function OrderDetails() {
           "Other" &&
         !customReason.trim()
       ) {
-        Alert.alert(
-          "Reason Required",
-          "Please enter your cancellation reason."
-        );
+        showToast("Please enter your cancellation reason.");
         return;
       }
 
@@ -386,10 +370,7 @@ export default function OrderDetails() {
         }
 
         if (!farmerId) {
-          Alert.alert(
-            "Error",
-            "Farmer not found."
-          );
+          showToast("Farmer not found.");
           return;
         }
 
@@ -412,21 +393,14 @@ export default function OrderDetails() {
 
         await loadOrder();
 
-        Alert.alert(
-          "Order Cancelled",
-          "The order has been cancelled successfully."
-        );
+        showToast("Order cancelled successfully.");
       } catch (error: any) {
         console.log(
           "CANCEL ORDER ERROR:",
           error
         );
 
-        Alert.alert(
-          "Error",
-          error?.message ||
-            "Failed to cancel the order."
-        );
+        showToast(error?.message || "Failed to cancel the order.");
       } finally {
         setActionLoading(false);
       }
@@ -441,47 +415,37 @@ export default function OrderDetails() {
       <View className="flex-1 justify-center items-center bg-white">
         <ActivityIndicator
           size="large"
-          color="#15803D"
+          color="#14532d"
         />
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-green-700">
+    <View className="flex-1 bg-[#14532d]">
 
       {/* ================= HEADER ================= */}
-      <View className="flex-row items-center pt-16 px-5 pb-5">
+      <View className="bg-[#14532d] px-5 pb-5 pt-14">
+        <View className="flex-row items-center">
+          <TouchableOpacity
+            onPress={() => router.back()}
+            className="mr-3 h-10 w-10 items-center justify-center"
+            accessibilityRole="button"
+            accessibilityLabel="Back to orders"
+          >
+            <Ionicons name="arrow-back" size={22} color="white" />
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() =>
-            router.back()
-          }
-        >
-          <Ionicons
-            name="arrow-back"
-            size={24}
-            color="white"
-          />
-        </TouchableOpacity>
-
-        <View className="ml-4 flex-1">
-
-          <Text className="text-white text-2xl font-bold">
-            Order Details
-          </Text>
-
-          <Text className="text-green-100 text-sm">
-            {order.orderNumber ||
-              `Order #${order.id}`}
-          </Text>
-
+          <View className="flex-1">
+            <Text className="text-2xl font-bold text-white">
+              Order Details
+            </Text>
+          </View>
         </View>
-
       </View>
 
       {/* ================= BODY ================= */}
-      <View className="flex-1 bg-white rounded-t-[35px] p-5">
+      <View className="flex-1 bg-[#fafafa] px-4 pt-5">
 
         <ScrollView
           showsVerticalScrollIndicator={
@@ -493,13 +457,13 @@ export default function OrderDetails() {
         >
 
           {/* ================= ORDER NUMBER ================= */}
-          <View className="bg-green-50 border border-green-100 rounded-2xl p-4 mb-4">
+          <View className="mb-3 rounded-[10px] border border-green-100 bg-white p-4">
 
-            <Text className="text-gray-500 text-xs">
+            <Text className="text-xs font-medium text-gray-500">
               FarmGate Order ID
             </Text>
 
-            <Text className="text-green-700 font-black text-lg mt-1">
+            <Text className="mt-1 text-lg font-bold text-[#14532d]">
               {order.orderNumber ||
                 `FG-${order.id}`}
             </Text>
@@ -507,9 +471,9 @@ export default function OrderDetails() {
           </View>
 
           {/* ================= BUYER INFORMATION ================= */}
-          <View className="bg-gray-50 rounded-2xl p-4 mb-4">
+          <View className="mb-3 rounded-[10px] border border-gray-100 bg-white p-4">
 
-            <Text className="font-bold text-lg mb-3">
+            <Text className="mb-3 text-base font-bold text-gray-900">
               Buyer Information
             </Text>
 
@@ -518,13 +482,36 @@ export default function OrderDetails() {
               <Ionicons
                 name="person-outline"
                 size={19}
-                color="#15803D"
+                color="#14532d"
               />
 
-              <Text className="ml-2 text-gray-700 font-semibold">
-                {order.buyerName ||
-                  "Buyer"}
-              </Text>
+              <View className="ml-2 flex-1 flex-row items-center justify-between">
+                <Text className="font-semibold text-gray-700">
+                  {order.buyerName || "Buyer"}
+                </Text>
+                {order.buyerId && (
+                  <TouchableOpacity
+                    onPress={() =>
+                      router.push({
+                        pathname: "/farmer/chats/chat",
+                        params: {
+                          buyerId: order.buyerId,
+                          buyerName: order.buyerName || "Buyer",
+                        },
+                      })
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={`Message ${order.buyerName || "buyer"}`}
+                    className="ml-3 h-10 w-10 items-center justify-center rounded-[10px] bg-green-50"
+                  >
+                    <Ionicons
+                      name="chatbubble-ellipses-outline"
+                      size={20}
+                      color="#14532d"
+                    />
+                  </TouchableOpacity>
+                )}
+              </View>
 
             </View>
 
@@ -534,11 +521,11 @@ export default function OrderDetails() {
                 <Ionicons
                   name="call-outline"
                   size={19}
-                  color="#15803D"
+                  color="#14532d"
                 />
 
-                <Text className="ml-2 text-gray-700">
-                  {order.address.phone}
+                <Text className="ml-2 text-gray-600">
+                  {formatPhilippinePhoneNumber(order.address.phone)}
                 </Text>
 
               </View>
@@ -547,14 +534,14 @@ export default function OrderDetails() {
           </View>
 
           {/* ================= ORDER TIMELINE ================= */}
-          <View className="bg-gray-50 rounded-2xl p-4 mb-4">
-            <Text className="font-bold text-lg mb-4">Order Timeline</Text>
+          <View className="mb-3 rounded-[10px] border border-gray-100 bg-white p-4">
+            <Text className="mb-4 text-base font-bold text-gray-900">Order Timeline</Text>
 
             <TimelineRow
               icon="cart-outline"
               title="Order Placed"
               date={order.createdAt}
-              color="#15803D"
+              color="#14532d"
               showLine={!!order.farmerDecisionAt || !!order.cancelledAt}
             />
 
@@ -573,7 +560,7 @@ export default function OrderDetails() {
                 icon="cube-outline"
                 title="Processing"
                 date={order.processingAt}
-                color="#15803D"
+                color="#14532d"
                 showLine={!!order.toReceiveAt || !!order.deliveredAt}
               />
             )}
@@ -591,7 +578,7 @@ export default function OrderDetails() {
             {order.deliveredAt && (
               <TimelineRow
                 icon="checkmark-circle-outline"
-                title="Delivered"
+                title={order.delivery === "pickup" ? "Claimed" : "Delivered"}
                 date={order.deliveredAt}
                 color="#2563EB"
                 showLine={false}
@@ -610,22 +597,29 @@ export default function OrderDetails() {
           </View>
 
           {/* ================= STATUS ================= */}
-          <View className="bg-gray-50 rounded-2xl p-4 mb-4">
-            <Text className="text-gray-500 mb-2">Order Status</Text>
+          <View className="mb-3 rounded-[10px] border border-gray-100 bg-white p-4">
+            <Text className="mb-2 text-xs font-medium text-gray-500">Order Status</Text>
             <Text
-              className={`font-bold text-lg ${
+              className={`text-lg font-bold ${
                 order.status === "pending"
                   ? "text-amber-600"
                   : order.status === "accepted"
                   ? "text-blue-600"
                   : order.status === "processing"
-                  ? "text-green-700"
+                  ? ""
                   : order.status === "to_receive"
                   ? "text-purple-700"
-                  : order.status === "delivered"
+                  : order.status === "delivered" ||
+                    order.status === "claimed"
                   ? "text-blue-600"
                   : "text-gray-600"
               }`}
+              style={{
+                color:
+                  order.status === "processing"
+                    ? "#14532d"
+                    : undefined,
+              }}
             >
               {getStatusLabel(order.status)}
             </Text>
@@ -635,7 +629,7 @@ export default function OrderDetails() {
           {order.status ===
             "cancelled" && (
 
-            <View className="bg-red-50 border border-red-100 rounded-2xl p-4 mb-4">
+            <View className="mb-3 rounded-[10px] border border-red-100 bg-red-50 p-4">
 
               <View className="flex-row items-center mb-3">
 
@@ -645,35 +639,35 @@ export default function OrderDetails() {
                   color="#DC2626"
                 />
 
-                <Text className="text-red-700 font-bold text-lg ml-2">
+                <Text className="ml-2 text-base font-bold text-red-700">
                   Cancellation Details
                 </Text>
 
               </View>
 
-              <Text className="text-gray-500 text-sm">
+              <Text className="text-xs font-medium text-gray-500">
                 Cancelled By
               </Text>
 
-              <Text className="font-bold capitalize mb-3">
+              <Text className="mb-3 font-semibold capitalize text-gray-800">
                 {order.cancelledBy ||
                   "Unknown"}
               </Text>
 
-              <Text className="text-gray-500 text-sm">
+              <Text className="text-xs font-medium text-gray-500">
                 Reason
               </Text>
 
-              <Text className="font-semibold mb-3">
+              <Text className="mb-3 font-medium text-gray-800">
                 {order.cancelReason ||
                   "No reason provided"}
               </Text>
 
-              <Text className="text-gray-500 text-sm">
+              <Text className="text-xs font-medium text-gray-500">
                 Cancelled Date
               </Text>
 
-              <Text className="font-semibold">
+              <Text className="font-medium text-gray-800">
                 {formatDateTime(
                   order.cancelledAt
                 )}
@@ -683,9 +677,9 @@ export default function OrderDetails() {
           )}
 
           {/* ================= PRODUCTS ================= */}
-          <View className="bg-gray-100 rounded-2xl p-4 mb-4">
+          <View className="mb-3 rounded-[10px] border border-gray-100 bg-white p-4">
 
-            <Text className="font-bold text-lg mb-4">
+            <Text className="mb-4 text-base font-bold text-gray-900">
               Products
             </Text>
 
@@ -700,31 +694,36 @@ export default function OrderDetails() {
                     product.productId ||
                     `product-${index}`
                   }
-                  className="flex-row justify-between mb-4"
+                  className={`flex-row justify-between py-3 ${
+                    index < (order.products?.length || 0) - 1
+                      ? "border-b border-gray-100"
+                      : ""
+                  }`}
                 >
 
                   <View className="flex-1">
 
-                    <Text className="font-semibold">
+                    <Text className="font-semibold text-gray-800">
                       {product.name}
                     </Text>
 
-                    <Text className="text-gray-500 mt-1">
+                    <Text className="mt-1 text-sm text-gray-600">
                       Qty:{" "}
                       {product.quantity}
                     </Text>
 
-                    <Text className="text-gray-400 text-xs mt-1">
+                    <Text className="mt-1 text-xs text-gray-500">
                       ₱
                       {Number(
                         product.price
                       ).toFixed(2)}
-                      {" / unit"}
+                      {" / "}
+                      {product.unit || "unit"}
                     </Text>
 
                   </View>
 
-                  <Text className="font-semibold text-green-700">
+                  <Text className="font-bold text-[#14532d]">
                     ₱
                     {(
                       Number(
@@ -743,17 +742,17 @@ export default function OrderDetails() {
           </View>
 
           {/* ================= DELIVERY ================= */}
-          <View className="bg-gray-100 rounded-2xl p-4 mb-4">
+          <View className="mb-3 rounded-[10px] border border-gray-100 bg-white p-4">
 
-            <Text className="font-bold text-lg mb-3">
+            <Text className="mb-3 text-base font-bold text-gray-900">
               Delivery Information
             </Text>
 
-            <Text className="text-gray-500 text-sm">
+            <Text className="text-xs font-medium text-gray-500">
               Type
             </Text>
 
-            <Text className="font-semibold capitalize mb-4">
+            <Text className="mb-4 mt-1 font-semibold capitalize text-gray-800">
               {order.delivery ||
                 "N/A"}
             </Text>
@@ -762,20 +761,20 @@ export default function OrderDetails() {
             "pickup" ? (
 
               <>
-                <Text className="text-gray-500 text-sm">
+                <Text className="text-xs font-medium text-gray-500">
                   Pickup Date
                 </Text>
 
-                <Text className="font-semibold mb-3">
+                <Text className="mb-3 mt-1 font-semibold text-gray-800">
                   {order.pickupDate ||
                     "Not set"}
                 </Text>
 
-                <Text className="text-gray-500 text-sm">
+                <Text className="text-xs font-medium text-gray-500">
                   Pickup Time
                 </Text>
 
-                <Text className="font-semibold">
+                <Text className="mt-1 font-semibold text-gray-800">
                   {order.pickupTime ||
                     "Not set"}
                 </Text>
@@ -784,16 +783,16 @@ export default function OrderDetails() {
             ) : (
 
               <>
-                <Text className="text-gray-500 text-sm">
+                <Text className="text-xs font-medium text-gray-500">
                   Delivery Address
                 </Text>
 
-                <Text className="font-semibold mt-1">
+                <Text className="mt-1 font-semibold text-gray-800">
                   {order.address?.street ||
                     ""}
                 </Text>
 
-                <Text>
+                <Text className="text-gray-600">
                   {order.address?.barangay ||
                     ""}
                   {order.address?.barangay
@@ -803,7 +802,7 @@ export default function OrderDetails() {
                     ""}
                 </Text>
 
-                <Text>
+                <Text className="text-gray-600">
                   {order.address?.province ||
                     ""}
                 </Text>
@@ -814,10 +813,10 @@ export default function OrderDetails() {
                     <Ionicons
                       name="call-outline"
                       size={16}
-                      color="#15803D"
+                      color="#14532d"
                     />
 
-                    <Text className="ml-2">
+                    <Text className="ml-2 text-gray-600">
                       {
                         order
                           .address
@@ -834,9 +833,9 @@ export default function OrderDetails() {
           </View>
 
           {/* ================= PAYMENT ================= */}
-          <View className="bg-gray-100 rounded-2xl p-4 mb-4">
+          <View className="mb-3 rounded-[10px] border border-gray-100 bg-white p-4">
 
-            <Text className="font-bold text-lg mb-3">
+            <Text className="mb-3 text-base font-bold text-gray-900">
               Payment
             </Text>
 
@@ -844,20 +843,24 @@ export default function OrderDetails() {
 
               <Ionicons
                 name={
-                  order.payment ===
+                  order.delivery === "pickup"
+                    ? "storefront-outline"
+                    : order.payment ===
                   "gcash"
                     ? "qr-code-outline"
                     : "cash-outline"
                 }
                 size={20}
-                color="#15803D"
+                color="#14532d"
               />
 
-              <Text className="ml-2 font-semibold">
+              <Text className="ml-2 font-semibold text-gray-800">
                 {order.payment ===
-                "gcash"
+                "gcash" && order.delivery !== "pickup"
                   ? "GCash"
-                  : "Cash on Delivery"}
+                  : order.delivery === "pickup"
+                    ? "Pay on Pickup"
+                    : "Cash on Delivery"}
               </Text>
 
             </View>
@@ -865,15 +868,15 @@ export default function OrderDetails() {
           </View>
 
           {/* ================= TOTAL ================= */}
-          <View className="bg-green-50 rounded-2xl p-5">
+          <View className="rounded-[10px] border border-green-100 bg-green-50 p-4">
 
             <View className="flex-row justify-between">
 
-              <Text className="font-bold text-lg">
+              <Text className="font-semibold text-gray-800">
                 Total
               </Text>
 
-              <Text className="font-bold text-2xl text-green-700">
+              <Text className="text-2xl font-bold text-[#14532d]">
                 ₱
                 {Number(
                   order.total
@@ -888,19 +891,19 @@ export default function OrderDetails() {
 
         {/* ================= ACTIONS ================= */}
         {!actionLoading && order.status === "pending" && (
-          <View className="flex-row mt-4">
+          <View className="flex-row border-t border-gray-100 bg-[#fafafa] pb-5 pt-2">
             <TouchableOpacity
               onPress={openCancelModal}
-              className="flex-1 border border-red-500 py-4 rounded-xl mr-2"
+              className="mr-2 flex-1 rounded-[10px] border border-red-200 bg-white py-3.5"
             >
-              <Text className="text-red-500 text-center font-bold">Decline</Text>
+              <Text className="text-center font-bold text-red-600">Decline</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={handleAccept}
-              className="flex-1 bg-green-700 py-4 rounded-xl ml-2"
+              className="ml-2 flex-1 rounded-[10px] bg-[#14532d] py-3.5"
             >
-              <Text className="text-white text-center font-bold">Accept</Text>
+              <Text className="text-center font-bold text-white">Accept</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -908,31 +911,31 @@ export default function OrderDetails() {
         {!actionLoading && order.status === "accepted" && (
           <>
             {order.payment === "gcash" && order.paymentStatus !== "paid" && (
-              <View className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 mt-4">
+              <View className="mt-4 rounded-[10px] border border-amber-200 bg-amber-50 p-3">
                 <Text className="text-yellow-800 text-sm font-semibold">
                   Waiting for the buyer to complete the GCash payment.
                 </Text>
               </View>
             )}
 
-            <View className="flex-row mt-4">
+            <View className="flex-row border-t border-gray-100 bg-[#fafafa] pb-5 pt-2">
               {!(order.payment === "gcash" && order.paymentStatus === "paid") && (
                 <TouchableOpacity
                   onPress={openCancelModal}
-                  className="flex-1 border border-red-500 py-4 rounded-xl mr-2"
+                  className="mr-2 flex-1 rounded-[10px] border border-red-200 bg-white py-3.5"
                 >
-                  <Text className="text-red-500 text-center font-bold">Cancel Order</Text>
+                  <Text className="text-center font-bold text-red-600">Cancel Order</Text>
                 </TouchableOpacity>
               )}
 
               {(order.payment === "cod" || order.paymentStatus === "paid") && (
                 <TouchableOpacity
                   onPress={handleProcessing}
-                  className={`flex-1 bg-green-700 py-4 rounded-xl ${
+                  className={`flex-1 rounded-[10px] bg-[#14532d] py-3.5 ${
                     order.payment === "gcash" && order.paymentStatus === "paid" ? "" : "ml-2"
                   }`}
                 >
-                  <Text className="text-white text-center font-bold">Mark as Processing</Text>
+                  <Text className="text-center font-bold text-white">Mark as Processing</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -942,27 +945,29 @@ export default function OrderDetails() {
         {!actionLoading && order.status === "processing" && (
           <TouchableOpacity
             onPress={handleToReceive}
-            className="bg-purple-700 py-4 rounded-xl mt-4"
+            className="mt-4 rounded-[10px] bg-purple-700 py-3.5"
           >
-            <Text className="text-white text-center font-bold">Mark as To Receive</Text>
+            <Text className="text-center font-bold text-white">Mark as To Receive</Text>
           </TouchableOpacity>
         )}
 
         {!actionLoading && order.status === "to_receive" && (
           <TouchableOpacity
             onPress={handleDelivered}
-            className="bg-blue-600 py-4 rounded-xl mt-4"
+            className="mt-4 rounded-[10px] bg-[#14532d] py-3.5"
           >
-            <Text className="text-white text-center font-bold">Mark as Delivered</Text>
+            <Text className="text-center font-bold text-white">
+              {order.delivery === "pickup" ? "Mark as Claimed" : "Mark as Delivered"}
+            </Text>
           </TouchableOpacity>
         )}
 
         {actionLoading && (
 
-          <View className="mt-4 bg-gray-100 rounded-xl py-4 items-center">
+          <View className="mt-4 items-center rounded-[10px] bg-white py-4">
 
             <ActivityIndicator
-              color="#15803D"
+              color="#14532d"
             />
 
             <Text className="text-gray-600 mt-2">
@@ -980,6 +985,7 @@ export default function OrderDetails() {
           showCancelModal
         }
         transparent
+        statusBarTranslucent
         animationType="fade"
         onRequestClose={() =>
           setShowCancelModal(
@@ -988,13 +994,13 @@ export default function OrderDetails() {
         }
       >
 
-        <View className="flex-1 bg-black/50 justify-end">
+        <View className="flex-1 justify-end bg-black/40">
 
-          <View className="bg-white rounded-t-[30px] p-6">
+          <View className="rounded-t-[24px] bg-[#fafafa] p-5">
 
             <View className="w-10 h-1 bg-gray-300 rounded-full self-center mb-5" />
 
-            <Text className="text-xl font-bold text-gray-800">
+            <Text className="text-xl font-bold text-gray-900">
               {order.status === "accepted" ? "Cancel Order" : "Decline Order"}
             </Text>
 
@@ -1020,10 +1026,10 @@ export default function OrderDetails() {
                         reason
                       )
                     }
-                    className={`border rounded-2xl px-4 py-3 mb-3 flex-row items-center ${
+                    className={`mb-3 flex-row items-center rounded-[10px] border px-4 py-3 ${
                       selected
                         ? "border-red-500 bg-red-50"
-                        : "border-gray-200"
+                          : "border-gray-200 bg-white"
                     }`}
                   >
 
@@ -1064,7 +1070,7 @@ export default function OrderDetails() {
                 placeholder="Enter your reason..."
                 multiline
                 textAlignVertical="top"
-                className="border border-gray-300 rounded-2xl px-4 py-3 min-h-[100px] mb-4 text-gray-800"
+                className="mb-4 min-h-[100px] rounded-[10px] border border-gray-300 bg-white px-4 py-3 text-gray-800"
               />
             )}
 
@@ -1076,7 +1082,7 @@ export default function OrderDetails() {
               disabled={
                 actionLoading
               }
-              className="bg-red-600 py-4 rounded-2xl"
+              className="rounded-[10px] bg-red-600 py-3.5"
             >
 
               <Text className="text-white text-center font-bold">
@@ -1095,7 +1101,7 @@ export default function OrderDetails() {
               disabled={
                 actionLoading
               }
-              className="bg-gray-100 py-4 rounded-2xl mt-3"
+              className="mt-3 rounded-[10px] bg-white py-3.5"
             >
 
               <Text className="text-gray-700 text-center font-bold">

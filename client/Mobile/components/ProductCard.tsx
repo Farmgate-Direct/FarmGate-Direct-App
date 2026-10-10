@@ -9,10 +9,12 @@ const IMG_HEIGHT = 140;
 
 type Props = {
   item: ProductType;
+  salesCount?: number;
+  salesLabel?: string;
 };
 
 // ================= PRODUCT CARD (shared) =================
-// Used by both Home (Top-selling, Resale) and Shop's browse grid - one
+// Used by Home's Top-selling section and Shop's browse grid - one
 // card design so both screens stay visually consistent.
 //
 // Layout structure follows the reference: image on top, info row below
@@ -22,7 +24,11 @@ type Props = {
 //
 // Tap-through only: opens Product Details, where quantity selection and
 // Add to Cart already live (see buyer/products/[id].tsx).
-export default function ProductCard({ item }: Props) {
+export default function ProductCard({
+  item,
+  salesCount,
+  salesLabel = "sold",
+}: Props) {
   const router = useRouter();
 
   const stock = item.stock || 0;
@@ -91,7 +97,9 @@ export default function ProductCard({ item }: Props) {
                 <Text className="text-[9px] text-gray-300 mx-1">·</Text>
               </>
             )}
-            <Text className="text-[9px] text-gray-400">{item.totalSales || 0} sold</Text>
+            <Text className="text-[9px] text-gray-400">
+              {salesCount ?? item.totalSales ?? 0} {salesLabel}
+            </Text>
           </View>
         </View>
 

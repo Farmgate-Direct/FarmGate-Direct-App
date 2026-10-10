@@ -8,6 +8,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import {
+  BuyerUnreadChatsProvider,
+  useBuyerUnreadChats,
+} from "../../../src/hooks/BuyerUnreadChats";
 
 // ─── Tab order: Home · Shop · [QR] · Message · Profile ───────────────────────
 // QR is index 2 — the exact center of 5 tabs
@@ -24,6 +28,7 @@ function CustomTabBar() {
   const router   = useRouter();
   const segments = useSegments();
   const active   = segments[segments.length - 1] ?? "home";
+  const { unreadChatIds } = useBuyerUnreadChats();
 
   return (
     <View style={styles.barWrapper}>
@@ -60,11 +65,16 @@ function CustomTabBar() {
               style={styles.item}
               activeOpacity={0.75}
             >
-              <Ionicons
-                name={(focused ? tab.icon : `${tab.icon}-outline`) as any}
-                size={23}
-                color={focused ? "#14532d" : "#9ca3af"}
-              />
+              <View>
+                <Ionicons
+                  name={(focused ? tab.icon : `${tab.icon}-outline`) as any}
+                  size={23}
+                  color={focused ? "#14532d" : "#9ca3af"}
+                />
+                {tab.name === "message" && unreadChatIds.size > 0 && (
+                  <View style={styles.unreadTabDot} />
+                )}
+              </View>
               <Text style={[styles.label, focused && styles.labelActive]}>
                 {tab.label}
               </Text>
@@ -152,23 +162,36 @@ const styles = StyleSheet.create({
     color:      "#14532d",
     fontWeight: "600",
   },
+  unreadTabDot: {
+    position: "absolute",
+    top: -1,
+    right: -3,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: "#dc2626",
+    borderWidth: 1,
+    borderColor: "#ffffff",
+  },
 });
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
 export default function Layout() {
   return (
-    <Tabs
-      tabBar={() => <CustomTabBar />}
-      screenOptions={{
-        headerShown:          false,
-        tabBarHideOnKeyboard:  true,
-      }}
-    >
-      <Tabs.Screen name="home"    />
-      <Tabs.Screen name="shop"    />
-      <Tabs.Screen name="qr"      />
-      <Tabs.Screen name="profile" />
-      <Tabs.Screen name="message" />
-    </Tabs>
+    <BuyerUnreadChatsProvider>
+      <Tabs
+        tabBar={() => <CustomTabBar />}
+        screenOptions={{
+          headerShown:          false,
+          tabBarHideOnKeyboard:  true,
+        }}
+      >
+        <Tabs.Screen name="home"    />
+        <Tabs.Screen name="shop"    />
+        <Tabs.Screen name="qr"      />
+        <Tabs.Screen name="profile" />
+        <Tabs.Screen name="message" />
+      </Tabs>
+    </BuyerUnreadChatsProvider>
   );
 }

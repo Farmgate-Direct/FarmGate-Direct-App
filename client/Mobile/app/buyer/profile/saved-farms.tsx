@@ -198,7 +198,10 @@ const SavedFarmsScreen = () => {
       {/* REMOVE MODAL */}
       {modalVisible && (
         <View className="absolute inset-0 justify-center items-center bg-black/40">
-          <View className="bg-white rounded-[5px] p-6 w-80">
+          <View
+            className="bg-white rounded-[5px] p-6 w-80"
+            style={{ borderWidth: 1, borderColor: "#14532d" }}
+          >
 
             <Text className="text-gray-800 text-lg font-semibold mb-4">
               Are you sure you want to remove this farm?

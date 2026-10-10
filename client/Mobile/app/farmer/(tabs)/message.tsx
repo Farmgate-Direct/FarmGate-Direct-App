@@ -1,22 +1,30 @@
-import { Ionicons } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../../FirebaseConfig";
-import { listenChats } from "../../../src/services/chatService";
+import { listenChats, markChatRead } from "../../../src/services/chatService";
+
+const toMillis = (value: any) => {
+  if (typeof value?.toMillis === "function") return value.toMillis();
+  if (typeof value?.toDate === "function") return value.toDate().getTime();
+  return 0;
+};
 
 const Messages = () => {
   const router = useRouter();
 
   const [chats, setChats] = useState<any[]>([]);
+  const [farmerId, setFarmerId] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,15 +36,21 @@ const Messages = () => {
         if (!userStr) return;
 
         const user = JSON.parse(userStr);
+        const uid = user.uid || user.userId || user.id;
+        if (!uid) {
+          setLoading(false);
+          return;
+        }
+        setFarmerId(uid);
 
         // ✅ store unsubscribe para ma-cleanup
         unsubscribe = listenChats(
-          user.uid,
+          uid,
           async (data) => {
             const formatted = await Promise.all(
               data.map(async (chat: any) => {
                 const otherUid = chat.users.find(
-                  (u: string) => u !== user.uid
+                  (u: string) => u !== uid
                 );
 
                 const userDoc = await getDoc(
@@ -45,6 +59,7 @@ const Messages = () => {
 
                 return {
                   ...chat,
+                  otherUserId: otherUid,
                   otherUserData: userDoc.data(),
                 };
               })
@@ -55,7 +70,7 @@ const Messages = () => {
           }
         );
       } catch (error) {
-        console.log(error);
+        console.error("FARMER MESSAGES LIST ERROR:", error);
         setLoading(false);
       }
     };
@@ -70,32 +85,30 @@ const Messages = () => {
   if (loading) {
     return (
       <View className="flex-1 justify-center items-center bg-white">
-        <ActivityIndicator size="large" color="#15803d" />
+        <ActivityIndicator size="large" color="#14532d" />
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-green-700">
-
+    <View className="flex-1 bg-white">
       {/* HEADER */}
-      <View className="bg-green-700 px-6 py-4 pt-16">
-        <Text className="text-white text-[25px] font-bold">
-          Chats
+      <View className="bg-green-900 pt-14 pb-4 px-5 rounded-b-2xl flex-row items-center">
+        <Text className="text-white font-bold text-lg ml-4">
+          Messages
         </Text>
       </View>
 
       {/* BODY */}
-      <View className="flex-1 bg-white rounded-t-[40px] px-6 pt-6">
-        <FlatList
+      <FlatList
           data={chats}
           keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 20 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 20 }}
           ListEmptyComponent={
             <View className="items-center mt-20">
-              <Ionicons
-                name="chatbubble-ellipses-outline"
+              <MaterialCommunityIcons
+                name="chat-outline"
                 size={60}
                 color="#d1d5db"
               />
@@ -104,52 +117,96 @@ const Messages = () => {
               </Text>
             </View>
           }
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              onPress={() =>
-                router.push({
+          renderItem={({ item, index }) => {
+            const isUnread =
+              item.lastSenderId !== farmerId &&
+              toMillis(item.lastMessageTime) >
+                toMillis(item.lastReadAt?.[farmerId]);
+
+            return (
+              <View>
+              <TouchableOpacity
+                onPress={() => {
+                  void markChatRead(item.id, farmerId).catch((error) =>
+                    console.error("MARK FARMER CHAT READ ERROR:", error)
+                  );
+                  router.push({
                   pathname: "/farmer/chats/chat",
                   params: {
-                    buyerId: item.otherUserData?.uid,
+                    buyerId: item.otherUserId,
                     buyerName: item.otherUserData?.fullName,
+                    buyerProfileImage: item.otherUserData?.profileImage || "",
                   },
-                })
-              }
-              className="bg-green-50 p-4 rounded-2xl mb-4 flex-row items-center"
-            >
-              {/* AVATAR */}
-              <View className="w-12 h-12 rounded-full bg-green-200 items-center justify-center mr-4">
-                <Ionicons name="person" size={22} color="#15803d" />
-              </View>
+                  });
+                }}
+                className="flex-row items-center rounded-[10px] px-2 py-4"
+                style={isUnread ? { backgroundColor: "#f0fdf4" } : undefined}
+              >
+                {/* AVATAR */}
+                <View
+                  className="mr-4 h-12 w-12 items-center justify-center overflow-hidden rounded-full"
+                  style={{ backgroundColor: "#f0fdf4" }}
+                >
+                  {item.otherUserData?.profileImage ? (
+                    <Image
+                      source={{ uri: item.otherUserData.profileImage }}
+                      style={{ width: "100%", height: "100%" }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <MaterialCommunityIcons name="account" size={24} color="#14532d" />
+                  )}
+                </View>
 
-              {/* CONTENT */}
-              <View className="flex-1">
-                <View className="flex-row justify-between items-center">
-                  <Text className="font-bold text-gray-800">
-                    {item.otherUserData?.fullName}
-                  </Text>
-                  <Text className="text-xs text-gray-400">
-                    {item.lastMessageTime?.toDate
-                      ? item.lastMessageTime
-                          .toDate()
-                          .toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                      : ""}
+                {/* CONTENT */}
+                <View className="flex-1">
+                  <View className="flex-row items-center justify-between">
+                    <Text
+                      className={`font-bold ${
+                        isUnread ? "text-gray-900" : "text-gray-800"
+                      }`}
+                    >
+                      {item.otherUserData?.fullName}
+                    </Text>
+                    <Text className="text-xs text-gray-400">
+                      {item.lastMessageTime?.toDate
+                        ? item.lastMessageTime
+                            .toDate()
+                            .toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                        : ""}
+                    </Text>
+                  </View>
+                  <Text
+                    numberOfLines={1}
+                    className={`mt-1 text-sm ${
+                      isUnread
+                        ? "font-semibold text-gray-800"
+                        : "text-gray-500"
+                    }`}
+                  >
+                    {item.lastMessage}
                   </Text>
                 </View>
-                <Text
-                  numberOfLines={1}
-                  className="text-gray-600 mt-1"
-                >
-                  {item.lastMessage}
-                </Text>
+                {isUnread && (
+                  <View
+                    className="ml-3 h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: "#14532d" }}
+                  />
+                )}
+              </TouchableOpacity>
+              {index < chats.length - 1 && (
+                <View
+                  className="h-px"
+                  style={{ backgroundColor: "#f3f4f6", marginLeft: 64 }}
+                />
+              )}
               </View>
-            </TouchableOpacity>
-          )}
+            );
+          }}
         />
-      </View>
     </View>
   );
 };

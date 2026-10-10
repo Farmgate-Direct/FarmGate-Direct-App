@@ -1,10 +1,11 @@
-import { Ionicons } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Text,
   TouchableOpacity,
   View,
@@ -12,9 +13,11 @@ import {
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../../FirebaseConfig";
 import { listenChats } from "../../../src/services/chatService";
+import { useBuyerUnreadChats } from "../../../src/hooks/BuyerUnreadChats";
 
 const BuyerMessages = () => {
   const router = useRouter();
+  const { unreadChatIds, markRead } = useBuyerUnreadChats();
 
   const [chats, setChats] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,61 +72,75 @@ const BuyerMessages = () => {
   if (loading) {
     return (
       <View className="flex-1 justify-center items-center bg-white">
-        <ActivityIndicator size="large" color="#15803d" />
+        <ActivityIndicator size="large" color="#14532d" />
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-green-700">
+    <View className="flex-1 bg-white">
 
       {/* HEADER */}
-      <View className="bg-green-700 px-6 py-4 pt-16 flex-row items-center">
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="white" />
-        </TouchableOpacity>
-        <Text className="text-white text-2xl font-bold ml-5">
-          Chats
+      <View className="bg-green-900 pt-14 pb-4 px-5 rounded-b-2xl flex-row items-center">
+        <Text className="text-white font-bold text-lg ml-4">
+          Messages
         </Text>
       </View>
 
       {/* BODY */}
-      <View className="flex-1 bg-white rounded-t-[40px] px-6 pt-6">
-        <FlatList
-          data={chats}
-          keyExtractor={(item) => item.id}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 20 }}
-          ListEmptyComponent={
-            <View className="items-center mt-20">
-              <Ionicons
-                name="chatbubble-ellipses-outline"
-                size={60}
-                color="#d1d5db"
-              />
-              <Text className="text-gray-400 mt-4">
-                No messages yet.
-              </Text>
-            </View>
-          }
-          renderItem={({ item }) => (
+      <FlatList
+        data={chats}
+        keyExtractor={(item) => item.id}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: 16, paddingBottom: 20 }}
+        ListEmptyComponent={
+          <View className="items-center mt-20">
+            <MaterialCommunityIcons
+              name="chat-outline"
+              size={60}
+              color="#d1d5db"
+            />
+            <Text className="text-gray-400 mt-4">
+              No messages yet.
+            </Text>
+          </View>
+        }
+        renderItem={({ item, index }) => (
+          <View>
             <TouchableOpacity
-              onPress={() =>
-                router.push({
-                  pathname: "/buyer/messages/ChatScreen",
-                  params: {
-                    farmerId: item.otherUserData?.uid,
-                    farmerName:
-                      item.otherUserData?.farmName ||
-                      item.otherUserData?.fullName,
-                  },
-                })
+              onPress={() => {
+                void markRead(item.id).catch((error) =>
+                  console.error("MARK BUYER CHAT READ ERROR:", error)
+                );
+                  router.push({
+                    pathname: "/buyer/messages/ChatScreen" as any,
+                    params: {
+                      farmerId: item.otherUserData?.uid,
+                      farmerName:
+                        item.otherUserData?.farmName ||
+                        item.otherUserData?.fullName,
+                      farmerProfileImage: item.otherUserData?.profileImage || "",
+                    },
+                  })
+                }}
+              className="flex-row items-center py-4 px-2 rounded-[10px]"
+              style={
+                unreadChatIds.has(item.id)
+                  ? { backgroundColor: "#f0fdf4" }
+                  : undefined
               }
-              className="bg-green-50 p-4 rounded-2xl mb-4 flex-row items-center"
             >
               {/* AVATAR */}
-              <View className="w-12 h-12 rounded-full bg-green-200 items-center justify-center mr-4">
-                <Ionicons name="person" size={22} color="#15803d" />
+              <View className="w-12 h-12 rounded-full overflow-hidden items-center justify-center mr-4" style={{ backgroundColor: "#f0fdf4" }}>
+                {item.otherUserData?.profileImage ? (
+                  <Image
+                    source={{ uri: item.otherUserData.profileImage }}
+                    style={{ width: "100%", height: "100%" }}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <MaterialCommunityIcons name="account" size={24} color="#14532d" />
+                )}
               </View>
 
               {/* CONTENT */}
@@ -146,15 +163,24 @@ const BuyerMessages = () => {
                 </View>
                 <Text
                   numberOfLines={1}
-                  className="text-gray-600 mt-1"
+                  className="text-gray-500 text-sm mt-1"
                 >
                   {item.lastMessage}
                 </Text>
               </View>
+              {unreadChatIds.has(item.id) && (
+                <View className="w-2.5 h-2.5 rounded-full ml-3" style={{ backgroundColor: "#14532d" }} />
+              )}
             </TouchableOpacity>
-          )}
-        />
-      </View>
+              {index < chats.length - 1 && (
+                <View
+                  className="h-px"
+                  style={{ backgroundColor: "#f3f4f6", marginLeft: 64 }}
+                />
+              )}
+          </View>
+        )}
+      />
     </View>
   );
 };

@@ -15,6 +15,8 @@ import { db } from "../../../FirebaseConfig";
 import {
   ActivityIndicator,
   Animated,
+  Dimensions,
+  FlatList,
   Modal,
   ScrollView,
   StatusBar,
@@ -24,6 +26,8 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
+import { useVideoPlayer, VideoView } from "expo-video";
+import { useEvent } from "expo";
 import { useToast } from "../../../context/ToastContext";
 import { addToCart } from "@/src/services/cartService";
 import {
@@ -55,9 +59,19 @@ export default function ProductDetails() {
   const [modalMode, setModalMode] = useState<"cart" | "buynow">("cart");
   const [farmerProfileImage, setFarmerProfileImage] = useState("");
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const [selectedMediaIndex, setSelectedMediaIndex] = useState(0);
+  const videoPlayer = useVideoPlayer(product?.video ?? null, (player) => {
+    player.loop = false;
+  });
+  const { isPlaying: isProductVideoPlaying } = useEvent(
+    videoPlayer,
+    "playingChange",
+    { isPlaying: videoPlayer.playing }
+  );
 
   const slideAnim = useRef(new Animated.Value(300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const carouselRef = useRef<FlatList>(null);
 
   useEffect(() => {
     loadProduct();
@@ -218,7 +232,7 @@ export default function ProductDetails() {
   const totalReviews = product?.totalReviews || 0;
 
   // ================= RATING BREAKDOWN (Play Store style bars) =================
-  // Computed from the real `reviews` array (not filteredReviews) so it
+  // Computed from the real reviews array (not filteredReviews) so it
   // stays consistent with avgRating/totalReviews above, which are also
   // unfiltered, product-level aggregates.
   const ratingDistribution = useMemo(() => {
@@ -257,6 +271,21 @@ export default function ProductDetails() {
       </View>
     );
   }
+
+  const productImages = product.images?.length
+    ? product.images
+    : product.video
+      ? []
+      : product.image
+        ? [product.image]
+        : [];
+  const productMedia = [
+    ...(product.video
+      ? [{ type: "video" as const, uri: product.video }]
+      : []),
+    ...productImages.map((uri) => ({ type: "image" as const, uri })),
+  ];
+  const mediaWidth = Dimensions.get("window").width;
 
   const openModal = (mode: "cart" | "buynow") => {
     if (!currentBatch) {
@@ -347,16 +376,70 @@ export default function ProductDetails() {
           contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* ── HERO IMAGE ── */}
+          {/* ── PRODUCT MEDIA (swipeable, video first) ── */}
           <View
             className="w-full aspect-square bg-[#f0fdf4]"
-            style={{ marginHorizontal: -20, marginTop: -20, marginBottom: 20, width: "auto" }}
+            style={{ marginHorizontal: -20, marginTop: -20, marginBottom: 12, width: "auto" }}
           >
-            {product.image ? (
-              <Image
-                source={{ uri: product.image }}
-                style={{ width: "100%", height: "100%" }}
-                contentFit="cover"
+            {productMedia.length > 0 ? (
+              <FlatList
+                ref={carouselRef}
+                data={productMedia}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                keyExtractor={(media) => `${media.type}-${media.uri}`}
+                onMomentumScrollEnd={(event) => {
+                  const index = Math.round(
+                    event.nativeEvent.contentOffset.x / mediaWidth
+                  );
+                  if (productMedia[index]?.type !== "video") {
+                    videoPlayer.pause();
+                  }
+                  setSelectedMediaIndex(index);
+                }}
+                renderItem={({ item: media }) => (
+                  <View style={{ width: mediaWidth, height: "100%" }}>
+                    {media.type === "video" ? (
+                      <>
+                        <VideoView
+                          player={videoPlayer}
+                          style={{ width: "100%", height: "100%" }}
+                          contentFit="cover"
+                          nativeControls={false}
+                        />
+                        <TouchableOpacity
+                          accessibilityRole="button"
+                          accessibilityLabel={
+                            isProductVideoPlaying
+                              ? "Pause product video"
+                              : "Play product video"
+                          }
+                          onPress={() =>
+                            isProductVideoPlaying
+                              ? videoPlayer.pause()
+                              : videoPlayer.play()
+                          }
+                          className="absolute inset-0 items-center justify-center"
+                        >
+                          <View className="h-14 w-14 items-center justify-center rounded-full bg-black/50">
+                            <Ionicons
+                              name={isProductVideoPlaying ? "pause" : "play"}
+                              size={28}
+                              color="white"
+                            />
+                          </View>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <Image
+                        source={{ uri: media.uri }}
+                        style={{ width: "100%", height: "100%" }}
+                        contentFit="cover"
+                      />
+                    )}
+                  </View>
+                )}
               />
             ) : (
               <View className="flex-1 items-center justify-center">
@@ -367,6 +450,7 @@ export default function ProductDetails() {
             <LinearGradient
               colors={["rgba(0,0,0,0.35)", "transparent"]}
               className="absolute top-0 left-0 right-0 h-36"
+              pointerEvents="none"
             />
 
             <TouchableOpacity
@@ -377,6 +461,69 @@ export default function ProductDetails() {
               <Ionicons name="arrow-back" size={20} color={DARK_GREEN} />
             </TouchableOpacity>
           </View>
+
+          {productMedia.length > 1 && (
+            <View className="mb-5">
+              <View className="flex-row items-center justify-center gap-1.5 mb-3">
+                {productMedia.map((media, index) => (
+                  <View
+                    key={`dot-${media.type}-${media.uri}`}
+                    style={{
+                      width: selectedMediaIndex === index ? 18 : 6,
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor:
+                        selectedMediaIndex === index ? DARK_GREEN : "#d1d5db",
+                    }}
+                  />
+                ))}
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+              >
+                <View className="flex-row gap-2">
+                  {productMedia.map((media, index) => (
+                    <TouchableOpacity
+                      key={`${media.type}-${media.uri}`}
+                      onPress={() => {
+                        if (media.type !== "video") {
+                          videoPlayer.pause();
+                        }
+                        setSelectedMediaIndex(index);
+                        carouselRef.current?.scrollToOffset({
+                          offset: index * mediaWidth,
+                          animated: true,
+                        });
+                      }}
+                      className="h-16 w-16 overflow-hidden rounded-[10px]"
+                      style={{
+                        borderWidth: selectedMediaIndex === index ? 2 : 1,
+                        borderColor:
+                          selectedMediaIndex === index ? DARK_GREEN : "#e5e7eb",
+                      }}
+                    >
+                      <Image
+                        source={{
+                          uri:
+                            media.type === "video"
+                              ? product.image
+                              : media.uri,
+                        }}
+                        style={{ width: "100%", height: "100%" }}
+                        contentFit="cover"
+                      />
+                      {media.type === "video" && (
+                        <View className="absolute inset-0 items-center justify-center bg-black/30">
+                          <Ionicons name="play" size={22} color="white" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+          )}
 
           {/* Name + price */}
           <View className="flex-row items-start justify-between">
@@ -677,6 +824,8 @@ export default function ProductDetails() {
             className="bg-white rounded-t-[32px] px-6 pt-3 pb-10 absolute bottom-0 w-full"
             style={{
               transform: [{ translateY: slideAnim }],
+              borderTopWidth: 2,
+              borderColor: DARK_GREEN,
               elevation: 12,
               shadowColor: "#000",
               shadowOffset: { width: 0, height: -4 },
@@ -684,9 +833,7 @@ export default function ProductDetails() {
               shadowRadius: 12,
             }}
           >
-            <View className="w-10 h-1 bg-gray-200 rounded-full self-center mb-5" />
-
-            <View className="flex-row gap-4 mb-5">
+            <View className="flex-row gap-4 mb-5 mt-2">
               <View
                 style={{
                   width: 88,
@@ -829,7 +976,7 @@ export default function ProductDetails() {
               activeOpacity={0.85}
             >
               <Text className="text-white font-black text-base">
-                {modalMode === "cart" ? "Add-to-Cart" : "Buy Now"}
+                {modalMode === "cart" ? "Add to Cart" : "Buy Now"}
               </Text>
             </TouchableOpacity>
           </Animated.View>

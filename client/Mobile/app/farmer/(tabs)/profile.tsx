@@ -1,31 +1,22 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import {
-  AntDesign,
-  Ionicons,
-} from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
-import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useState } from "react";
 
 import {
   ActivityIndicator,
-  Alert,
   Image,
-  ScrollView,
+  Modal,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 
 import {
-  collection,
   doc,
   getDoc,
-  getDocs,
-  query,
-  where,
 } from "firebase/firestore";
 
 import { db } from "../../../FirebaseConfig";
@@ -34,10 +25,8 @@ import { UserType } from "../../../src/types/user";
 const Profile = () => {
   const router = useRouter();
   const [user, setUser] = useState<UserType | null>(null);
-  const [productsCount, setProductsCount] = useState(0);
-  const [ordersCount, setOrdersCount] = useState(0);
-  const [farmerRating, setFarmerRating] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -68,62 +57,6 @@ const Profile = () => {
         setUser(userData);
       }
 
-      // ================= PRODUCTS =================
-      const productsQuery = query(
-        collection(db, "products"),
-        where(
-          "farmerId",
-          "==",
-          parsedUser.uid
-        )
-      );
-
-      const productSnap = await getDocs(productsQuery);
-
-      setProductsCount(productSnap.size);
-
-      // ================= ORDERS =================
-      const ordersQuery = query(
-        collection(db, "orders"),
-        where(
-          "farmerId",
-          "==",
-          parsedUser.uid
-        )
-      );
-
-      const ordersSnap = await getDocs(ordersQuery);
-
-      setOrdersCount(ordersSnap.size);
-
-      // ================= FARMER RATINGS =================
-      const ratingsQuery = query(
-        collection(
-          db,
-          "farmerRatings"
-        ),
-        where(
-          "farmerId",
-          "==",
-          parsedUser.uid
-        )
-      );
-
-      const ratingsSnap = await getDocs(ratingsQuery);
-
-      if (!ratingsSnap.empty) {
-
-        let total = 0;
-
-        ratingsSnap.forEach((doc) => {
-          total += doc.data().rating || 0;
-        });
-
-        const average = total / ratingsSnap.size;
-
-        setFarmerRating(Number(average.toFixed(1)));
-      }
-
     } catch (error) {
       console.log("PROFILE ERROR:", error);
     } finally {
@@ -131,391 +64,150 @@ const Profile = () => {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      setModalVisible(false);
+      await AsyncStorage.removeItem("user");
+      router.replace("/auth/login");
+    } catch (error) {
+      console.log("LOGOUT ERROR:", error);
+    }
+  };
+
   // ================= LOADING =================
   if (loading) {
     return (
-
-      <View className="flex-1 justify-center items-center bg-green-700">
+      <View className="flex-1 items-center justify-center bg-white">
         <ActivityIndicator
           size="large"
-          color="#fff"
+          color="#14532d"
         />
       </View>
     );
   }
 
+  const menuItems = [
+    { label: "My Account", icon: "account-outline", route: "/farmer/profile/account-setting" },
+    { label: "Farm Profile", icon: "sprout-outline", route: "/farmer/profile/edit-profile-farm" },
+    { label: "Balance", icon: "wallet-outline", route: "/farmer/profile/balance" },
+    { label: "QR Code", icon: "qrcode", route: "/farmer/profile/qr" },
+  ] as const;
+
   return (
+    <View className="flex-1" style={{ backgroundColor: "#14532d" }}>
+      <View className="h-32 justify-center px-6" />
 
-    <View className="flex-1 bg-green-700">
-
-      {/* HEADER */}
-      <View className="px-6 pt-16 pb-20">
-
-        {/* QR */}
-        <TouchableOpacity
-          className="absolute right-8 top-16"
-          onPress={() =>
-            router.push({
-              pathname: "/farmer/profile/qr",
-              params: {
-                uid: user?.uid,
-              },
-            })
-          }
-        >
-
-          <Ionicons
-            name="qr-code"
-            size={35}
-            color="white"
-          />
-
-        </TouchableOpacity>
-
-        {/* PROFILE */}
-        <View className="items-center">
-
-          <View className="relative">
-
-            {/* PROFILE IMAGE */}
-            {user?.profileImage ? (
-
-              <Image
-                source={{
-                  uri:
-                    user.profileImage,
-                }}
-                style={{
-                  width: 110,
-                  height: 110,
-                  borderRadius: 999,
-                  borderWidth: 4,
-                  borderColor: "white",
-                }}
-                resizeMode="cover"
-              />
-
-            ) : (
-
-              <View
-                style={{
-                  width: 110,
-                  height: 110,
-                  borderRadius: 999,
-                  backgroundColor:
-                    "white",
-                  justifyContent:
-                    "center",
-                  alignItems:
-                    "center",
-                  borderWidth: 4,
-                  borderColor:
-                    "white",
-                }}
-              >
-
-                <Ionicons
-                  name="person"
-                  size={55}
-                  color="#9ca3af"
-                />
-
-              </View>
-
-            )}
-
-            {/* CHANGE IMAGE BUTTON */}
-            <TouchableOpacity
-              onPress={() =>
-                router.push(
-                  "/farmer/profile/account-setting"
-                )
-              }
-              style={{
-                position: "absolute",
-                bottom: 0,
-                right: 0,
-                width: 34,
-                height: 34,
-                borderRadius: 999,
-                backgroundColor:
-                  "#15803d",
-                justifyContent:
-                  "center",
-                alignItems:
-                  "center",
-                borderWidth: 2,
-                borderColor:
-                  "white",
-              }}
-            >
-
-              <Ionicons
-                name="camera"
-                size={18}
-                color="white"
-              />
-
-            </TouchableOpacity>
-
-          </View>
-
-          {/* NAME */}
-          <Text className="text-white text-3xl font-bold mt-4">
-
-            {String(
-              user?.fullName || ""
-            )}
-
+      <View className="flex-1 rounded-t-[40px] bg-white px-6 pt-20">
+        <View className="mb-8 items-center">
+          <Text className="mt-1 text-lg font-bold text-gray-800">
+            {user?.fullName || "Farmer"}
           </Text>
-
-          {/* VERIFIED */}
-          <View className="flex-row items-center mt-2">
-
-            <Text className="text-white text-sm font-medium">
-              Registered Farmer
-            </Text>
-
-            <Ionicons
-              name="checkmark-circle"
+          <View className="mt-1 flex-row items-center">
+            <Text className="text-sm text-gray-500">Registered Farmer</Text>
+            <MaterialCommunityIcons
+              name="check-circle"
               size={16}
-              color="#4ade80"
-              style={{
-                marginLeft: 4,
-              }}
+              color="#16a34a"
+              style={{ marginLeft: 4 }}
             />
-
           </View>
-
         </View>
 
-      </View>
+        <View>
+          {menuItems.map((item, index) => (
+            <TouchableOpacity
+              key={item.label}
+              className={`w-full flex-row items-center justify-between py-4 ${
+                index < menuItems.length - 1 ? "border-b border-gray-100" : ""
+              }`}
+              onPress={() => router.push({
+                pathname: item.route,
+                params: item.route === "/farmer/profile/qr" ? { uid: user?.uid } : undefined,
+              })}
+            >
+              <View className="flex-row items-center gap-3">
+                <MaterialCommunityIcons
+                  name={item.icon}
+                  size={20}
+                  color="#14532d"
+                />
+                <Text className="text-sm font-semibold text-gray-800">
+                  {item.label}
+                </Text>
+              </View>
+              <MaterialCommunityIcons
+                name="chevron-right"
+                size={18}
+                color="#9ca3af"
+              />
+            </TouchableOpacity>
+          ))}
+        </View>
 
-      {/* BODY */}
-      <View className="flex-1 bg-gray-100 rounded-t-[35px] px-6 pt-6 -mt-10">
-
-        <ScrollView
-          showsVerticalScrollIndicator={
-            false
-          }
+        <TouchableOpacity
+          className="mt-2 w-full flex-row items-center justify-between border-t border-gray-100 py-4"
+          onPress={() => setModalVisible(true)}
         >
-
-          {/* STATS */}
-          <View className="flex-row bg-white rounded-3xl p-5 justify-between shadow-sm">
-
-            {/* PRODUCTS */}
-            <View className="items-center flex-1">
-
-              <Text className="font-bold text-2xl text-gray-900">
-                {productsCount}
-              </Text>
-
-              <Text className="text-gray-500 text-xs mt-1">
-                PRODUCTS
-              </Text>
-
-            </View>
-
-            {/* ORDERS */}
-            <View className="items-center flex-1">
-
-              <Text className="font-bold text-2xl text-gray-900">
-                {ordersCount}
-              </Text>
-
-              <Text className="text-gray-500 text-xs mt-1">
-                ORDERS
-              </Text>
-
-            </View>
-
-            {/* RATING */}
-            <View className="items-center flex-1">
-
-              <Text className="font-bold text-2xl text-gray-900">
-
-                {farmerRating || "0.0"}
-
-              </Text>
-
-              <Text className="text-gray-500 text-xs mt-1">
-                RATING
-              </Text>
-
-            </View>
-
+          <View className="flex-row items-center gap-3">
+            <MaterialCommunityIcons name="logout" size={20} color="#dc2626" />
+            <Text className="text-sm font-semibold text-red-600">Log out</Text>
           </View>
-
-          {/* FARM PROFILE */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() =>
-              router.push(
-                "/farmer/profile/edit-profile-farm"
-              )
-            }
-          >
-
-            <View className="bg-white mt-6 rounded-3xl p-5 flex-row items-center justify-between">
-
-              <View className="flex-row items-center">
-
-                <Ionicons
-                  name="leaf-outline"
-                  size={22}
-                  color="#15803d"
-                />
-
-                <Text className="font-semibold text-base ml-3">
-                  Farm Profile
-                </Text>
-
-              </View>
-
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color="#999"
-              />
-
-            </View>
-
-          </TouchableOpacity>
-
-          {/* ACCOUNT SETTINGS */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() =>
-              router.push(
-                "/farmer/profile/account-setting"
-              )
-            }
-          >
-
-            <View className="bg-white mt-4 rounded-3xl p-5 flex-row items-center justify-between">
-
-              <View className="flex-row items-center">
-
-                <Ionicons
-                  name="settings-outline"
-                  size={22}
-                  color="#15803d"
-                />
-
-                <Text className="font-semibold text-base ml-3">
-                  Account Settings
-                </Text>
-
-              </View>
-
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color="#999"
-              />
-
-            </View>
-
-          </TouchableOpacity>
-
-
-          <TouchableOpacity
-            onPress={() =>
-              router.push(
-                "/farmer/profile/balance"
-              )
-            }
-            className="bg-green-50 border mt-4 border-green-100 rounded-2xl p-4 flex-row items-center"
-          >
-            <View className="w-10 h-10 rounded-full bg-green-100 items-center justify-center">
-              <Ionicons
-                name="wallet-outline"
-                size={22}
-                color="#15803D"
-              />
-            </View>
-
-            <View className="flex-1 ml-3">
-              <Text className="font-bold text-gray-800">
-                Balance
-              </Text>
-
-              <Text className="text-gray-500 text-xs mt-1">
-                Manage wallet and deposits
-              </Text>
-            </View>
-
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color="#15803D"
-            />
-          </TouchableOpacity>
-          {/* LOGOUT */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => {
-
-              Alert.alert(
-                "Logout",
-                "Are you sure you want to logout?",
-                [
-                  {
-                    text: "Cancel",
-                    style: "cancel",
-                  },
-                  {
-                    text: "Logout",
-                    style:
-                      "destructive",
-
-                    onPress:
-                      async () => {
-
-                        await AsyncStorage.removeItem(
-                          "user"
-                        );
-
-                        router.replace(
-                          "/auth/login"
-                        );
-                      },
-                  },
-                ]
-              );
-            }}
-          >
-
-            <View className="bg-red-50 mt-4 rounded-3xl p-5 flex-row items-center justify-between mb-10">
-
-              <View className="flex-row items-center">
-
-                <Ionicons
-                  name="log-out-outline"
-                  size={22}
-                  color="#dc2626"
-                />
-
-                <Text className="font-semibold text-base ml-3 text-red-600">
-                  Logout
-                </Text>
-
-              </View>
-
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color="#dc2626"
-              />
-
-            </View>
-
-          </TouchableOpacity>
-
-        </ScrollView>
-
+        </TouchableOpacity>
       </View>
 
+      <View className="absolute top-20 self-center items-center">
+        <View className="h-32 w-32 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-green-100">
+          {user?.profileImage ? (
+            <Image
+              source={{ uri: user.profileImage }}
+              className="h-full w-full"
+              resizeMode="cover"
+            />
+          ) : (
+            <MaterialCommunityIcons name="account" size={60} color="#14532d" />
+          )}
+        </View>
+        <TouchableOpacity
+          onPress={() => router.push("/farmer/profile/account-setting")}
+          className="absolute bottom-0 right-0 h-9 w-9 items-center justify-center rounded-full border-2 border-white"
+          style={{ backgroundColor: "#14532d" }}
+          accessibilityRole="button"
+          accessibilityLabel="Edit profile"
+        >
+          <MaterialCommunityIcons name="camera" size={18} color="white" />
+        </TouchableOpacity>
+      </View>
+
+      <Modal
+        visible={modalVisible}
+        transparent
+        statusBarTranslucent
+        animationType="fade"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View className="flex-1 items-center justify-center bg-black/40">
+          <View className="w-80 rounded-[5px] bg-white p-6">
+            <Text className="mb-4 text-lg font-semibold text-gray-800">
+              Are you sure you want to log out?
+            </Text>
+            <View className="mt-4 flex-row justify-between">
+              <TouchableOpacity
+                className="mr-2 flex-1 items-center rounded-[5px] bg-gray-200 px-4 py-2"
+                onPress={() => setModalVisible(false)}
+              >
+                <Text className="font-semibold text-gray-700">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="ml-2 flex-1 items-center rounded-[5px] px-4 py-2"
+                style={{ backgroundColor: "#dc2626" }}
+                onPress={handleLogout}
+              >
+                <Text className="font-semibold text-white">Log out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };

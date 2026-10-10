@@ -32,15 +32,8 @@ export type OrderStatus =
   | "delivered"
   | "cancelled";
 
-export type PaymentMethod =
-  | "gcash"
-  | "cod";
-
-export type PaymentStatus =
-  | "pending"
-  | "paid"
-  | "failed"
-  | "cancelled";
+export type PaymentMethod = "gcash" | "cod";
+export type PaymentStatus = "pending" | "paid" | "failed" | "cancelled";
 
 export type FulfillmentStatus =
   | "pending"
@@ -52,6 +45,12 @@ export type CommissionStatus =
   | "pending"
   | "charged"
   | "not_applicable";
+
+export type CodCommissionReservationStatus =
+  | "not_applicable"
+  | "reserved"
+  | "consumed"
+  | "released";
 
 export type OrderType = {
   id?: string;
@@ -71,12 +70,10 @@ export type OrderType = {
   total: number;
   status: OrderStatus;
 
-  // ================= FARMER DECISION =================
   farmerDecision?: "accepted" | "rejected";
   farmerDecisionAt?: any;
   rejectionReason?: string;
 
-  // ================= TIMESTAMPS =================
   createdAt?: any;
   processingAt?: any;
   toReceiveAt?: any;
@@ -86,17 +83,24 @@ export type OrderType = {
   updatedAt?: any;
   inventoryFulfilledAt?: any;
 
-  // ================= CANCEL =================
   cancelledBy?: "buyer" | "farmer";
   cancelReason?: string;
 
-  // ================= COMMISSION =================
   commissionRate?: number;
   commissionAmount?: number;
   commissionStatus?: CommissionStatus;
   commissionChargedAt?: any;
 
-  // ================= PAYMENT =================
+  farmerEarning?: number;
+  farmerWalletCredited?: boolean;
+  farmerWalletCreditedAt?: any;
+  farmerWalletPendingCredited?: boolean;
+  farmerWalletPendingCreditedAt?: any;
+  financialStatus?: "pending" | "settled" | "refunded" | "manual_review";
+
+  codCommissionReserved?: number;
+  codCommissionReservationStatus?: CodCommissionReservationStatus;
+
   paymentStatus?: PaymentStatus;
   xenditPaymentRequestId?: string;
   xenditPaymentId?: string;
@@ -107,15 +111,12 @@ export type OrderType = {
   paymentFailureReason?: string;
   paymentRequestCreatedAt?: any;
 
-  // ================= INVENTORY / FULFILLMENT =================
   inventoryFulfilled?: boolean;
   fulfillmentStatus?: FulfillmentStatus;
   fulfillmentError?: string;
   serverValidated?: boolean;
   serverValidatedAt?: any;
 
-  // ================= XENDIT WEBHOOK =================
   xenditWebhookEvent?: string;
   xenditWebhookReceivedAt?: any;
 };
-

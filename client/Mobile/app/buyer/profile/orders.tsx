@@ -49,6 +49,7 @@ const filters = [
   "processing",
   "to_receive",
   "delivered",
+  "claimed",
   "cancelled",
 ];
 
@@ -267,7 +268,9 @@ export default function BuyerOrders() {
 
     if (
       order.status !==
-      "delivered"
+        "delivered" &&
+      order.status !==
+        "claimed"
     ) {
 
       return 0;
@@ -288,6 +291,7 @@ export default function BuyerOrders() {
       case "processing": return "Processing";
       case "to_receive": return "To Receive";
       case "delivered": return "Delivered";
+      case "claimed": return "Claimed";
       case "cancelled": return "Cancelled";
       case "All": return "All";
       default: return status;
@@ -333,6 +337,13 @@ export default function BuyerOrders() {
           text: "#1D4ED8",
           border: "#2563EB",
           bg: "#DBEAFE",
+        };
+
+      case "claimed":
+        return {
+          text: "#14532d",
+          border: "#86EFAC",
+          bg: "#DCFCE7",
         };
 
       default:
@@ -511,152 +522,244 @@ export default function BuyerOrders() {
                 ? farmImages[(item as any).farmerId]
                 : "";
 
+            const productNames =
+              (item.products || [])
+                ?.map((product) => product.name)
+                .filter(Boolean)
+                .join(", ") || "No items";
+
+            const totalQty =
+              (item.products || []).reduce(
+                (sum, product) =>
+                  sum +
+                  (Number(product.quantity) || 0),
+                0
+              );
+
+            const isPickup =
+              (item as any).delivery === "pickup";
+
+            const isGcash =
+              (item as any).payment === "gcash";
+
+            const showWaiting =
+              item.status === "accepted" &&
+              (item as any).payment === "gcash" &&
+              (item as any).paymentStatus !== "paid";
+
+            const showRate =
+              item.status === "delivered" ||
+              (item.status as string) === "claimed";
+
             return (
               <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() =>
+                onPress={() => {
+                  if (item.status === "pending") {
+                    router.push({
+                      pathname: "/buyer/checkout/orderreceipt",
+                      params: {
+                        orderIds: JSON.stringify([item.id || ""]),
+                        from: "orders",
+                      },
+                    });
+                    return;
+                  }
+
                   router.push({
-                    pathname:
-                      "/buyer/profile/order-details",
+                    pathname: "/buyer/profile/order-details",
                     params: {
-                      orderId:
-                        item.id ||
-                        "",
+                      orderId: item.id || "",
                     },
-                  })
-                }
-                className="bg-white p-4 rounded-[10px] mb-3 border border-gray-100"
+                  });
+                }}
+                className="mb-3 rounded-2xl border border-gray-200 bg-white p-4"
               >
 
-                <View className="flex-row items-center">
-
-                  {/* ================= FARM PFP ================= */}
-                  <View className="w-14 h-14 rounded-full bg-green-900 justify-center items-center mr-4 overflow-hidden">
-
-                    {farmImage ? (
-
-                      <Image
-                        source={{ uri: farmImage }}
-                        style={{ width: "100%", height: "100%" }}
-                        resizeMode="cover"
-                      />
-
-                    ) : (
-
-                      <Text className="text-white font-bold text-lg">
-
-                        {item.farmName
-                          ?.charAt(0)
-                          ?.toUpperCase() ||
-                          "F"}
-
-                      </Text>
-                    )}
-
-                  </View>
-
-                  {/* ================= INFO ================= */}
-                  <View className="flex-1">
-
-                    {/* FARM NAME */}
-                    <Text className="font-bold text-base text-gray-900">
-                      {item.farmName ||
-                        "Farm"}
-                    </Text>
-
-                    {/* DATE */}
-                    <View className="flex-row items-center mt-1.5">
-
-                      <Ionicons
-                        name="calendar-outline"
-                        size={13}
-                        color="#6B7280"
-                      />
-
-                      <Text className="text-gray-500 text-xs ml-1">
-                        {formatOrderDate(
-                          item.createdAt
-                        )}
-                      </Text>
-
+                {/* ============ FARM + STATUS ============ */}
+                <View className="flex-row items-start justify-between">
+                  <View className="mr-3 flex-1 flex-row items-center">
+                    <View className="h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-green-900">
+                      {farmImage ? (
+                        <Image
+                          source={{ uri: farmImage }}
+                          style={{ width: "100%", height: "100%" }}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <Text className="text-lg font-bold text-white">
+                          {item.farmName
+                            ?.charAt(0)
+                            ?.toUpperCase() || "F"}
+                        </Text>
+                      )}
                     </View>
-
-                    {/* TOTAL */}
-                    <Text className="text-green-900 font-semibold text-sm mt-1.5">
-                      ₱
-                      {Number(
-                        item.total
-                      ).toFixed(2)}
-                    </Text>
-
-                    {item.status === "accepted" &&
-                      item.payment === "gcash" &&
-                      item.paymentStatus !== "paid" && (
-                      <Text className="text-amber-600 text-xs font-semibold mt-1">
-                        Awaiting GCash payment
+                    <View className="ml-3 flex-1">
+                      <Text className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
+                        Farm
                       </Text>
-                    )}
-
-                  </View>
-
-                  {/* ================= RIGHT ================= */}
-                  <View className="items-end ml-2">
-
-                    {/* STATUS */}
-                    <View className="px-3 py-1">
-
                       <Text
-                        style={{
-                          color:
-                            statusColors.text,
-                        }}
-                        className="font-bold text-[11px]"
+                        className="mt-0.5 text-lg font-extrabold text-gray-900"
+                        numberOfLines={1}
                       >
-                        {getStatusLabel(item.status)}
+                        {item.farmName || "Farm"}
                       </Text>
-
                     </View>
+                  </View>
+                  <View
+                    style={{
+                      backgroundColor: statusColors.bg,
+                      borderColor: (statusColors as any).border || statusColors.bg,
+                    }}
+                    className="items-center rounded-full border px-3.5 py-1.5"
+                  >
+                    <Text
+                      style={{ color: statusColors.text }}
+                      className="text-[13px] font-bold"
+                    >
+                      {getStatusLabel(item.status)}
+                    </Text>
+                  </View>
+                </View>
 
-                    {/* RATE INDICATOR */}
-                    {item.status ===
-                      "delivered" && (
+                {/* ============ DATE ============ */}
+                <View className="mt-2 flex-row items-center">
+                  <Ionicons
+                    name="calendar-outline"
+                    size={14}
+                    color="#6B7280"
+                  />
+                  <Text className="ml-1.5 text-[13px] font-semibold text-gray-600">
+                    {formatOrderDate(item.createdAt)}
+                  </Text>
+                </View>
 
-                      <View className="mt-2">
+                {/* ============ PRODUCTS ============ */}
+                <View className="mt-3 rounded-xl bg-gray-50 p-3">
+                  <Text className="text-[11px] font-bold uppercase tracking-widest text-gray-500">
+                    Order
+                  </Text>
+                  <Text
+                    className="mt-1 text-[15px] font-semibold leading-5 text-gray-900"
+                    numberOfLines={2}
+                  >
+                    {productNames}
+                  </Text>
+                  {totalQty > 0 && (
+                    <Text className="mt-1 text-[13px] font-semibold text-gray-600">
+                      {totalQty}{" "}
+                      {totalQty === 1 ? "item" : "items"}
+                    </Text>
+                  )}
+                </View>
 
-                        {unreviewedCount >
-                        0 ? (
+                {/* ============ FULFILLMENT + PAYMENT ============ */}
+                <View className="mt-3 flex-row gap-2">
+                  <View className="flex-1 flex-row items-center justify-center rounded-full border border-green-200 bg-green-50 px-3 py-2.5">
+                    <Ionicons
+                      name={
+                        isPickup
+                          ? "storefront-outline"
+                          : "bicycle-outline"
+                      }
+                      size={16}
+                      color="#14532d"
+                    />
+                    <Text
+                      className="ml-1.5 text-sm font-bold text-[#14532d]"
+                      numberOfLines={1}
+                    >
+                      {isPickup
+                        ? "Farm Pickup"
+                        : (item as any).delivery === "delivery"
+                          ? "Delivery"
+                          : (item as any).delivery || "N/A"}
+                    </Text>
+                  </View>
+                  <View className="flex-1 flex-row items-center justify-center rounded-full border border-gray-200 bg-gray-50 px-3 py-2.5">
+                    <Ionicons
+                      name={
+                        isGcash
+                          ? "qr-code-outline"
+                          : "cash-outline"
+                      }
+                      size={16}
+                      color="#374151"
+                    />
+                    <Text
+                      className="ml-1.5 text-sm font-bold text-gray-800"
+                      numberOfLines={1}
+                    >
+                      {isGcash
+                        ? "GCash"
+                        : (item as any).payment === "cod"
+                          ? "COD"
+                          : (item as any).payment || "N/A"}
+                    </Text>
+                  </View>
+                </View>
 
-                          <View className="bg-amber-500 px-3 py-1.5 rounded-[5px] flex-row items-center">
+                {/* ============ TOTAL ============ */}
+                <View className="mt-3 flex-row items-center justify-between border-t border-gray-100 pt-3">
+                  <Text className="text-[13px] font-bold uppercase tracking-widest text-gray-500">
+                    Total
+                  </Text>
+                  <Text className="text-xl font-extrabold text-green-900">
+                    ₱{Number(item.total).toFixed(2)}
+                  </Text>
+                </View>
 
-                            <Text className="text-white font-bold text-[10px]">
-                              Rate Now
-                            </Text>
+                {showWaiting && (
+                  <View className="mt-3 flex-row items-center rounded-xl border border-amber-200 bg-amber-50 p-3">
+                    <Ionicons
+                      name="time-outline"
+                      size={18}
+                      color="#B45309"
+                    />
+                    <Text className="ml-2 flex-1 text-[13px] font-bold leading-4 text-amber-800">
+                      Awaiting GCash payment
+                    </Text>
+                  </View>
+                )}
 
-                          </View>
-
-                        ) : (
-
-                          <View className="px-3 py-1.5 rounded-[5px] flex-row items-center">
-
-                            <Ionicons
-                              name="checkmark-circle"
-                              size={15}
-                              color={DARK_GREEN}
-                            />
-
-                            <Text className="text-green-900 font-semibold text-xs ml-1">
-                              Reviewed
-                            </Text>
-
-                          </View>
-
-                        )}
-
+                {showRate && (
+                  <View className="mt-3">
+                    {unreviewedCount > 0 ? (
+                      <View className="flex-row items-center justify-center rounded-xl bg-amber-500 py-3">
+                        <Ionicons
+                          name="star-outline"
+                          size={16}
+                          color="white"
+                        />
+                        <Text className="ml-1.5 text-sm font-bold text-white">
+                          Rate Now
+                        </Text>
+                      </View>
+                    ) : (
+                      <View className="flex-row items-center justify-center rounded-xl border border-green-200 bg-green-50 py-3">
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={16}
+                          color={DARK_GREEN}
+                        />
+                        <Text className="ml-1.5 text-sm font-bold text-green-900">
+                          Reviewed
+                        </Text>
                       </View>
                     )}
-
                   </View>
+                )}
 
+                {/* ============ VIEW HINT ============ */}
+                <View className="mt-2.5 flex-row items-center justify-end">
+                  <Text className="text-[13px] font-bold text-green-900">
+                    View details
+                  </Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={16}
+                    color={DARK_GREEN}
+                  />
                 </View>
 
               </TouchableOpacity>

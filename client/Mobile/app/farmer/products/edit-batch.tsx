@@ -23,6 +23,7 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   batch: BatchType | null;
+  unit: string;
 
   onSave: (
     batchDocId: string,
@@ -71,7 +72,7 @@ const Dropdown = ({
         onPress={() =>
           setOpen(!open)
         }
-        className="bg-gray-100 px-4 py-3 rounded-xl border border-gray-300 flex-row justify-between items-center"
+        className="flex-row items-center justify-between rounded-[10px] border border-gray-300 bg-gray-100 px-4 py-3"
       >
 
         <Text className="text-gray-800">
@@ -91,7 +92,7 @@ const Dropdown = ({
       </TouchableOpacity>
 
       {open && (
-        <View className="border border-gray-300 rounded-xl mt-1 overflow-hidden bg-white">
+        <View className="mt-1 overflow-hidden rounded-[10px] border border-gray-300 bg-white">
 
           {options.map(
             (option) => (
@@ -106,7 +107,7 @@ const Dropdown = ({
                 }}
                 className={`px-4 py-3 ${
                   option === value
-                    ? "bg-green-700"
+                    ? "bg-[#14532d]"
                     : "bg-white"
                 }`}
               >
@@ -137,6 +138,7 @@ const EditBatchModal = ({
   visible,
   onClose,
   batch,
+  unit,
   onSave,
   loading,
 }: Props) => {
@@ -270,14 +272,15 @@ const EditBatchModal = ({
       visible={visible}
       transparent
       animationType="fade"
+      statusBarTranslucent
       onRequestClose={
         onClose
       }
     >
 
-      <View className="flex-1 bg-black/40 justify-center px-6">
+      <View className="flex-1 justify-center bg-black/40 px-6">
 
-        <View className="bg-white rounded-3xl p-6 max-h-[90%]">
+        <View className="max-h-[90%] rounded-[10px] bg-white p-5">
 
           <ScrollView
             showsVerticalScrollIndicator={
@@ -301,7 +304,7 @@ const EditBatchModal = ({
               <Ionicons
                 name="layers-outline"
                 size={22}
-                color="#15803D"
+                color="#14532d"
               />
 
             </View>
@@ -314,7 +317,7 @@ const EditBatchModal = ({
             {/* ERROR */}
             {error ? (
 
-              <View className="bg-red-50 border border-red-100 rounded-xl p-3 mb-4">
+              <View className="mb-4 rounded-[10px] border border-red-100 bg-red-50 p-3">
 
                 <Text className="text-red-600 text-sm">
                   {error}
@@ -325,7 +328,7 @@ const EditBatchModal = ({
             ) : null}
 
             {/* CURRENT STOCK */}
-            <View className="bg-gray-50 rounded-xl px-4 py-4 mb-4">
+            <View className="mb-4 rounded-[10px] bg-gray-50 px-4 py-4">
 
               <View className="flex-row justify-between">
 
@@ -336,7 +339,7 @@ const EditBatchModal = ({
                   </Text>
 
                   <Text className="text-gray-800 font-bold text-xl mt-1">
-                    {batch.stock}
+                    {batch.stock} {unit}
                   </Text>
 
                 </View>
@@ -348,8 +351,7 @@ const EditBatchModal = ({
                   </Text>
 
                   <Text className="text-gray-800 font-semibold mt-1">
-                    {(batch as any).unit ||
-                      "product units"}
+                    {unit}
                   </Text>
 
                 </View>
@@ -363,12 +365,12 @@ const EditBatchModal = ({
                 </Text>
 
                 <Text className="text-gray-800 font-bold text-base mt-1">
-                  {batch.totalHarvested}
+                  {batch.totalHarvested} {unit}
                 </Text>
 
               </View>
 
-              <Text className="text-gray-400 text-[10px] mt-2">
+              <Text className="mt-2 text-xs text-gray-500">
                 Restock quantity will be added to the current stock.
                 Existing sales history will not be changed.
               </Text>
@@ -376,8 +378,8 @@ const EditBatchModal = ({
             </View>
 
             {/* PRICE */}
-            <Text className="text-xs text-gray-500 mb-1">
-              PRICE (₱)
+            <Text className="mb-1 text-xs text-gray-500">
+              PRICE (₱ per {unit.replace(/^per /, "")})
             </Text>
 
             <TextInput
@@ -388,12 +390,12 @@ const EditBatchModal = ({
               keyboardType="decimal-pad"
               placeholder="0.00"
               placeholderTextColor="#9CA3AF"
-              className="bg-gray-100 px-4 py-3 rounded-xl mb-4 border border-gray-300 text-gray-800"
+              className="mb-4 rounded-[10px] border border-gray-300 bg-gray-100 px-4 py-3 text-gray-800"
             />
 
             {/* RESTOCK */}
-            <Text className="text-xs text-gray-500 mb-1">
-              RESTOCK QUANTITY
+            <Text className="mb-1 text-xs text-gray-500">
+              RESTOCK QUANTITY ({unit})
             </Text>
 
             <TextInput
@@ -406,25 +408,26 @@ const EditBatchModal = ({
               keyboardType="numeric"
               placeholder="0"
               placeholderTextColor="#9CA3AF"
-              className="bg-gray-100 px-4 py-3 rounded-xl mb-2 border border-gray-300 text-gray-800"
+              className="mb-2 rounded-[10px] border border-gray-300 bg-gray-100 px-4 py-3 text-gray-800"
             />
 
-            <Text className="text-gray-400 text-[10px] mb-4">
+            <Text className="mb-4 text-xs text-gray-500">
               Enter 0 if you are not adding stock.
             </Text>
 
             {/* STOCK PREVIEW */}
-            <View className="bg-green-50 rounded-xl p-4 mb-4">
+            <View className="mb-4 rounded-[10px] bg-green-50 p-4">
 
-              <Text className="text-green-700 text-xs">
+              <Text className="text-xs text-gray-600">
                 Stock after save
               </Text>
 
-              <Text className="text-green-800 font-black text-2xl mt-1">
+              <Text className="mt-1 text-2xl font-bold text-[#14532d]">
                 {Number(
                   batch.stock || 0
                 ) +
-                  restockValue}
+                  restockValue}{" "}
+                {unit}
               </Text>
 
             </View>
@@ -449,10 +452,10 @@ const EditBatchModal = ({
                 disabled={
                   loading
                 }
-                className="w-[48%] border border-green-700 py-3 rounded-xl items-center"
+                className="w-[48%] items-center rounded-[10px] border border-[#14532d] py-3"
               >
 
-                <Text className="text-green-700 font-semibold">
+                <Text className="font-semibold text-[#14532d]">
                   Cancel
                 </Text>
 
@@ -466,12 +469,11 @@ const EditBatchModal = ({
                   !isFormValid ||
                   loading
                 }
-                className={`w-[48%] py-3 rounded-xl items-center ${
-                  isFormValid &&
-                  !loading
-                    ? "bg-green-700"
-                    : "bg-gray-400"
-                }`}
+                className="w-[48%] items-center rounded-[10px] py-3"
+                style={{
+                  backgroundColor:
+                    isFormValid && !loading ? "#14532d" : "#9ca3af",
+                }}
               >
 
                 {loading ? (

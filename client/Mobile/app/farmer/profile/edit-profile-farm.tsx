@@ -14,7 +14,6 @@ import React, {
 } from "react";
 
 import {
-  Alert,
   Image,
   ScrollView,
   Text,
@@ -24,6 +23,8 @@ import {
   ActivityIndicator,
   StatusBar,
 } from "react-native";
+import { useFarmerAlert } from "@/context/FarmerAlertContext";
+import { useToast } from "@/context/ToastContext";
 
 import * as ImagePicker from "expo-image-picker";
 
@@ -42,6 +43,8 @@ import { uploadFarmImageAsync } from "../../../src/services/cloudinaryFarmServic
 import { deleteCloudinaryImage } from "../../../src/services/deleteImageService";
 
 const EditProfileFarm = () => {
+  const Alert = useFarmerAlert();
+  const { showToast } = useToast();
   const [loading, setLoading] =
     useState(false);
 
@@ -55,6 +58,7 @@ const EditProfileFarm = () => {
       status: "",
 
       farmName: "",
+      street: "",
       barangay: "",
       municipality: "",
       province: "",
@@ -195,6 +199,9 @@ const EditProfileFarm = () => {
         farmName:
           user.farmName || "",
 
+        street:
+          user.street || "",
+
         barangay:
           user.barangay || "",
 
@@ -225,10 +232,7 @@ const EditProfileFarm = () => {
         JSON.stringify(updatedUser)
       );
 
-      Alert.alert(
-        "Success",
-        "Farm updated successfully"
-      );
+      showToast("Farm updated successfully.");
 
       router.back();
     } catch (error) {
@@ -247,19 +251,19 @@ const EditProfileFarm = () => {
   };
 
   return (
-    <View className="flex-1 bg-green-900">
+    <View className="flex-1 bg-[#f5f5f5]">
       <StatusBar
         barStyle="light-content"
       />
 
       {/* HEADER */}
-      <View className="flex-row items-center bg-green-900 pt-14 px-5 pb-3">
+      <View className="flex-row items-center px-5 pb-4 pt-14" style={{ backgroundColor: "#14532d" }}>
         <TouchableOpacity
           onPress={() =>
             router.back()
           }
           activeOpacity={0.7}
-          className="w-10 h-10 rounded-full bg-white/20 items-center justify-center"
+          className="h-10 w-10 items-center justify-center"
         >
           <Ionicons
             name="arrow-back"
@@ -268,18 +272,23 @@ const EditProfileFarm = () => {
           />
         </TouchableOpacity>
 
-        <Text className="flex-1 text-center text-white text-xl font-bold mr-10">
-          Edit Farm Profile
+        <Text className="ml-4 flex-1 text-lg font-bold text-white">
+          Farm Profile
         </Text>
       </View>
 
+      <ScrollView
+        className="flex-1"
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 32 }}
+      >
       {/* COVER PHOTO */}
-      {/* COVER PHOTO */}
-      <View className="bg-green-900 px-5 pb-5">
+      <View className="px-5 py-5">
         <TouchableOpacity
           onPress={pickImage}
           activeOpacity={0.85}
-          className="w-full h-52 rounded-3xl overflow-hidden border border-white/20 bg-gray-200"
+          className="h-44 w-full overflow-hidden rounded-[10px] border border-gray-200 bg-white"
         >
           {user.coverPhoto ? (
             <>
@@ -298,12 +307,12 @@ const EditProfileFarm = () => {
               <View
                 style={{
                   position: "absolute",
-                  bottom: 12,
-                  right: 12,
+                  bottom: 10,
+                  right: 10,
                   backgroundColor: "rgba(0,0,0,0.6)",
-                  borderRadius: 999,
-                  paddingHorizontal: 12,
-                  paddingVertical: 6,
+                  borderRadius: 10,
+                  paddingHorizontal: 10,
+                  paddingVertical: 7,
                   flexDirection: "row",
                   alignItems: "center",
                 }}
@@ -325,8 +334,8 @@ const EditProfileFarm = () => {
                 style={{
                   width: 56,
                   height: 56,
-                  borderRadius: 999,
-                  backgroundColor: "rgba(255,255,255,0.15)",
+                  borderRadius: 28,
+                  backgroundColor: "#f0fdf4",
                   alignItems: "center",
                   justifyContent: "center",
                 }}
@@ -334,15 +343,15 @@ const EditProfileFarm = () => {
                 <AntDesign
                   name="camera"
                   size={26}
-                  color="white"
+                  color="#14532d"
                 />
               </View>
 
-              <Text className="text-white text-base font-semibold mt-3">
+              <Text className="mt-3 text-base font-semibold text-gray-800">
                 Upload Cover Photo
               </Text>
 
-              <Text className="text-white/70 text-sm mt-1">
+              <Text className="mt-1 text-sm text-gray-500">
                 16:9 recommended
               </Text>
             </View>
@@ -351,26 +360,16 @@ const EditProfileFarm = () => {
       </View>
 
       {/* FORM */}
-      <View className="flex-1 bg-gray-100 rounded-t-[30px] -mt-3.5">
-        <ScrollView
-          showsVerticalScrollIndicator={
-            false
-          }
-          contentContainerStyle={{
-            paddingHorizontal: 24,
-            paddingTop: 28,
-            paddingBottom: 40,
-          }}
-        >
+      <View className="px-5 pt-1">
           {/* HEADER */}
-          <View className="flex-row items-center mb-5">
+          <View className="mb-4 flex-row items-center">
             <MaterialIcons
               name="agriculture"
               size={22}
-              color="#15803d"
+              color="#14532d"
             />
 
-            <Text className="text-lg font-bold text-gray-900 ml-2">
+            <Text className="ml-2 text-base font-bold text-gray-900">
               Farm Details
             </Text>
           </View>
@@ -388,21 +387,37 @@ const EditProfileFarm = () => {
             }
             placeholder="e.g. Dela Cruz Farm"
             placeholderTextColor="#aaa"
-            className="bg-white rounded-xl px-4 py-4 mb-4 text-base text-gray-900 border border-gray-200"
+            className="mb-4 rounded-[10px] border border-gray-200 bg-white px-4 py-3 text-base text-gray-900"
           />
 
           {/* LOCATION */}
-          <View className="flex-row items-center mt-1 mb-4">
+          <View className="mb-3 mt-1 flex-row items-center">
             <Ionicons
               name="location-outline"
               size={18}
-              color="#15803d"
+              color="#14532d"
             />
 
-            <Text className="text-base font-semibold text-gray-700 ml-2">
+            <Text className="ml-2 text-sm font-semibold text-gray-700">
               Location
             </Text>
           </View>
+
+          {/* STREET */}
+          <FieldLabel label="Street Name" />
+
+          <TextInput
+            value={user.street || ""}
+            onChangeText={(text) =>
+              setUser((prev) => ({
+                ...prev,
+                street: text,
+              }))
+            }
+            placeholder="e.g. 123 Mabini Street"
+            placeholderTextColor="#aaa"
+            className="mb-4 rounded-[10px] border border-gray-200 bg-white px-4 py-3 text-base text-gray-900"
+          />
 
           {/* BARANGAY */}
           <FieldLabel label="Barangay" />
@@ -417,7 +432,7 @@ const EditProfileFarm = () => {
             }
             placeholder="e.g. Brgy. San Isidro"
             placeholderTextColor="#aaa"
-            className="bg-white rounded-xl px-4 py-4 mb-4 text-base text-gray-900 border border-gray-200"
+            className="mb-4 rounded-[10px] border border-gray-200 bg-white px-4 py-3 text-base text-gray-900"
           />
 
           {/* MUNICIPALITY */}
@@ -433,7 +448,7 @@ const EditProfileFarm = () => {
             }
             placeholder="e.g. Hagonoy"
             placeholderTextColor="#aaa"
-            className="bg-white rounded-xl px-4 py-4 mb-4 text-base text-gray-900 border border-gray-200"
+            className="mb-4 rounded-[10px] border border-gray-200 bg-white px-4 py-3 text-base text-gray-900"
           />
 
           {/* PROVINCE */}
@@ -449,18 +464,18 @@ const EditProfileFarm = () => {
             }
             placeholder="e.g. Bulacan"
             placeholderTextColor="#aaa"
-            className="bg-white rounded-xl px-4 py-4 mb-4 text-base text-gray-900 border border-gray-200"
+            className="mb-4 rounded-[10px] border border-gray-200 bg-white px-4 py-3 text-base text-gray-900"
           />
 
           {/* ABOUT */}
-          <View className="flex-row items-center mt-1 mb-2">
+          <View className="mb-2 mt-1 flex-row items-center">
             <Ionicons
               name="information-circle-outline"
               size={18}
-              color="#15803d"
+              color="#14532d"
             />
 
-            <Text className="text-base font-semibold text-gray-700 ml-2">
+            <Text className="ml-2 text-sm font-semibold text-gray-700">
               About
             </Text>
           </View>
@@ -478,7 +493,7 @@ const EditProfileFarm = () => {
             textAlignVertical="top"
             placeholder="Tell buyers about your farm..."
             placeholderTextColor="#aaa"
-            className="bg-white rounded-xl px-4 pt-3 pb-3 mb-4 text-base text-gray-900 border border-gray-200 h-28"
+            className="mb-4 h-28 rounded-[10px] border border-gray-200 bg-white px-4 pb-3 pt-3 text-base text-gray-900"
           />
 
           {/* SAVE BUTTON */}
@@ -486,29 +501,21 @@ const EditProfileFarm = () => {
             onPress={handleSave}
             disabled={loading}
             activeOpacity={0.85}
-            className={`flex-row items-center justify-center py-4 rounded-2xl mt-6 ${loading
-                ? "bg-green-300"
-                : "bg-green-700"
-              }`}
+            className="mt-3 flex-row items-center justify-center rounded-[10px] py-3.5"
+            style={{ backgroundColor: loading ? "#86a991" : "#14532d" }}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <>
-                <Ionicons
-                  name="checkmark-circle-outline"
-                  size={22}
-                  color="white"
-                />
-
-                <Text className="text-white font-bold text-lg ml-2">
+                <Text className="ml-2 text-base font-semibold text-white">
                   Save Changes
                 </Text>
               </>
             )}
           </TouchableOpacity>
-        </ScrollView>
       </View>
+      </ScrollView>
     </View>
   );
 };
@@ -518,7 +525,7 @@ const FieldLabel = ({
 }: {
   label: string;
 }) => (
-  <Text className="text-sm font-bold text-gray-500 tracking-widest uppercase mb-1.5">
+  <Text className="mb-1.5 text-xs font-semibold text-gray-500">
     {label}
   </Text>
 );

@@ -2,12 +2,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useToast } from "../../../context/ToastContext";
+import { useAppAlert } from "@/context/FarmerAlertContext";
 import React, { useCallback, useState } from "react";
 import { getBatchesByProduct } from "@/src/services/productService";
 
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
   Text,
@@ -31,6 +31,7 @@ import { CartItem } from "@/src/types/cart";
 export default function Cart() {
   const router = useRouter();
   const { showToast } = useToast();
+  const Alert = useAppAlert();
   const [cartItems, setCartItems] = useState<FarmerCart[]>([]);
   const [loading, setLoading] = useState(true);
   const [stockMap, setStockMap] = useState<Record<string, number | null>>({});
@@ -673,7 +674,10 @@ ${message}`
       {/* REMOVE ITEM MODAL */}
       {removeTarget && (
         <View className="absolute inset-0 justify-center items-center bg-black/40">
-          <View className="bg-white rounded-[10px] p-6 w-80">
+          <View
+            className="bg-white rounded-[10px] p-6 w-80"
+            style={{ borderWidth: 1, borderColor: "#14532d" }}
+          >
             <Text className="text-gray-800 text-lg font-semibold mb-2">
               Remove item
             </Text>
