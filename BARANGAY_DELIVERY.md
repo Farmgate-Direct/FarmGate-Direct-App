@@ -79,7 +79,7 @@ default). Error codes: `INVALID_PROVINCE`, `UNKNOWN_CITY`, `UNKNOWN_BARANGAY`,
 ## Barangay coordinates: missing / suspicious
 
 `node data/build_barangay_data.js --check-only` →
-**569 rows, 13 with trusted coords, 556 missing, 0 suspicious, 0 duplicate keys.**
+**569 rows, 569 routable (564 verified/OSM + 5 approximate fallback), 0 missing, 0 suspicious, 0 duplicate keys.**
 
 - **With coords (serviceable):** `Baliwag|Poblacion`, `Calumpit|Poblacion`,
   `Guiguinto|Poblacion`, `Hagonoy|Iba` (OSM place node, field-verify before
