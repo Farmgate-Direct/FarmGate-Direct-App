@@ -1013,31 +1013,6 @@ export default function OrderDetails() {
           </View>
 
           <Text className="text-gray-500 text-sm mb-1">
-            Breakdown
-          </Text>
-
-          <View className="flex-row justify-between mb-1">
-            <Text className="text-gray-600 text-sm">Subtotal</Text>
-            <Text className="text-gray-800 text-sm font-semibold">
-              ₱{Number(order.subTotal ?? 0).toFixed(2)}
-            </Text>
-          </View>
-
-          <View className="flex-row justify-between mb-2">
-            <Text className="text-gray-600 text-sm">
-              Delivery fee
-              {order.delivery === "delivery" &&
-              order.distanceKm !== null &&
-              order.distanceKm !== undefined
-                ? ` (${Number(order.distanceKm).toFixed(1)} km)`
-                : ""}
-            </Text>
-            <Text className="text-gray-800 text-sm font-semibold">
-              ₱{Number(order.deliveryFee || 0).toFixed(2)}
-            </Text>
-          </View>
-
-          <Text className="text-gray-500 text-sm mb-1">
             Total Amount
           </Text>
 

@@ -53,11 +53,8 @@ import {
 } from "../../utils/validators";
 import { useToast } from "../../context/ToastContext";
 
-import {
-  BULACAN_PROVINCE,
-  BULACAN_CITIES,
-  barangaysForCity,
-} from "../../constants/bulacanBarangays";
+const PSGC_BASE =
+  "https://psgc.gitlab.io/api";
 
 type InputProps = {
   label: string;
@@ -136,15 +133,25 @@ const RegisterFarmer = () => {
   const [checkingEmail, setCheckingEmail] =
     useState(false);
 
-  // ================= LOCATION (Bulacan locked, local dataset) =================
-  // Names match the backend dataset exactly (exact match only, no fuzzy).
-  const [locationLoading] = useState(false);
+  // ================= LOCATION (FIXED: Central Luzon / Bulacan, like Add Address) =================
+  const [locationLoading, setLocationLoading] =
+    useState(true);
 
-  const cities = BULACAN_CITIES.map((name) => ({ name, code: name }));
+  const [cities, setCities] =
+    useState<any[]>([]);
 
-  const [selectedRegion] = useState<any>({ name: "Central Luzon (Region III)" });
+  const [barangays, setBarangays] =
+    useState<any[]>([]);
 
-  const [selectedProvince] = useState<any>({ name: BULACAN_PROVINCE });
+  const [
+    selectedRegion,
+    setSelectedRegion,
+  ] = useState<any>(null);
+
+  const [
+    selectedProvince,
+    setSelectedProvince,
+  ] = useState<any>(null);
 
   const [
     selectedCity,
@@ -162,15 +169,182 @@ const RegisterFarmer = () => {
   const [barangayFocus, setBarangayFocus] =
     useState(false);
 
-  // Barangays depend on the selected city (local dataset, synchronous).
-  const barangays = selectedCity
-    ? barangaysForCity(selectedCity.name).map((name) => ({ name, code: name }))
-    : [];
-
-  // Province is locked to Bulacan.
+  // ================= LOAD FIXED LOCATION =================
   useEffect(() => {
-    setProvince(BULACAN_PROVINCE);
+
+    loadFixedLocation();
+
   }, []);
+
+  const loadFixedLocation =
+    async () => {
+
+      try {
+
+        setLocationLoading(true);
+
+        // STEP 1: GET ALL REGIONS
+        const regionResponse =
+          await fetch(
+            `${PSGC_BASE}/regions`
+          );
+
+        if (!regionResponse.ok) {
+          throw new Error(
+            "Failed to fetch regions"
+          );
+        }
+
+        const regions =
+          await regionResponse.json();
+
+        // FIND CENTRAL LUZON
+        const centralLuzon =
+          regions.find(
+            (region: any) =>
+              region.name
+                ?.trim()
+                .toLowerCase() ===
+              "central luzon"
+          );
+
+        if (!centralLuzon) {
+          throw new Error(
+            "Central Luzon not found"
+          );
+        }
+
+        setSelectedRegion(
+          centralLuzon
+        );
+
+        // STEP 2: GET PROVINCES UNDER CENTRAL LUZON
+        const provinceResponse =
+          await fetch(
+            `${PSGC_BASE}/regions/${centralLuzon.code}/provinces`
+          );
+
+        if (!provinceResponse.ok) {
+          throw new Error(
+            "Failed to fetch provinces"
+          );
+        }
+
+        const provincesData =
+          await provinceResponse.json();
+
+        // FIND BULACAN
+        const bulacan =
+          provincesData.find(
+            (province: any) =>
+              province.name
+                ?.trim()
+                .toLowerCase() ===
+              "bulacan"
+          );
+
+        if (!bulacan) {
+          throw new Error(
+            "Bulacan not found"
+          );
+        }
+
+        setSelectedProvince(
+          bulacan
+        );
+
+        setProvince(
+          bulacan.name
+        );
+
+        // STEP 3: LOAD BULACAN CITIES/MUNICIPALITIES
+        await loadCities(
+          bulacan.code
+        );
+
+      } catch (error) {
+
+        console.log(
+          "Location loading error:",
+          error
+        );
+
+        showToast("Failed to load Bulacan locations. Please try again.");
+
+      } finally {
+
+        setLocationLoading(false);
+
+      }
+    };
+
+  // ================= LOAD CITIES =================
+  const loadCities =
+    async (
+      provinceCode: string
+    ) => {
+
+      try {
+
+        const response =
+          await fetch(
+            `${PSGC_BASE}/provinces/${provinceCode}/cities-municipalities`
+          );
+
+        if (!response.ok) {
+          throw new Error(
+            "Failed to fetch cities"
+          );
+        }
+
+        const data =
+          await response.json();
+
+        setCities(data);
+
+      } catch (error) {
+
+        console.log(
+          "City loading error:",
+          error
+        );
+
+      }
+    };
+
+  // ================= LOAD BARANGAYS =================
+  const loadBarangays =
+    async (
+      cityCode: string
+    ) => {
+
+      try {
+
+        const response =
+          await fetch(
+            `${PSGC_BASE}/cities-municipalities/${cityCode}/barangays`
+          );
+
+        if (!response.ok) {
+          throw new Error(
+            "Failed to fetch barangays"
+          );
+        }
+
+        const data =
+          await response.json();
+
+        setBarangays(data);
+
+      } catch (error) {
+
+        console.log(
+          "Barangay loading error:",
+          error
+        );
+
+      }
+    };
 
   // ================= PICK IMAGE =================
   const pickImage = async (
@@ -734,7 +908,13 @@ const RegisterFarmer = () => {
 
                 setBarangay("");
 
+                setBarangays([]);
+
                 setCityFocus(false);
+
+                loadBarangays(
+                  item.code
+                );
               }}
             />
 

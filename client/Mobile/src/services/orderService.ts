@@ -67,16 +67,11 @@ const requestBackend = async <T = any>(
     }
 
     if (!response.ok) {
-      const err: any = new Error(
+      throw new Error(
         data?.error ||
           data?.message ||
           `Backend request failed with status ${response.status}.`
       );
-      // Preserve the server error code (e.g. INVALID_PROVINCE, UNKNOWN_BARANGAY)
-      // so checkout can map it to a friendly message + Try again.
-      if (data?.code) err.code = data.code;
-      err.status = response.status;
-      throw err;
     }
 
     return data as T;
@@ -557,34 +552,17 @@ export const declineOrder = async (
   }
 };
 
-// ================= DELIVERY QUOTE (authoritative, server-computed) =================
-// Never trust client-computed fees. The backend reads the farm barangay from
-// users/{farmerId} and the buyer barangay from the address, then quotes
-// { deliveryFee, distanceKm, tier } with barangay-level distance (Bulacan only).
-
-export const quoteDelivery = async (
-  farmerId: string,
-  address: { province: string; city: string; barangay: string } | null,
-  delivery: "pickup" | "delivery" = "delivery"
-): Promise<{ deliveryFee: number; distanceKm: number | null; tier: string | null }> => {
-  if (delivery !== "delivery") {
-    return { deliveryFee: 0, distanceKm: 0, tier: null };
-  }
-  return await requestBackend("/delivery/quote", {
-    method: "POST",
-    body: JSON.stringify({ farmerId, address, delivery }),
-  });
-};
+// ================= UPDATE ORDER STATUS =================
+// processing / to_receive / delivered are all executed on the backend:
+//  - processing : COD stock is deducted atomically; GCash must be paid + fulfilled
+//  - to_receive : only from processing
+//  - delivered  : financial settlement (idempotent)
 
 export const updateOrderStatus = async (
   orderId: string,
   farmerId: string,
   status: "accepted" | "processing" | "to_receive" | "delivered"
 ) => {
-  // processing / to_receive / delivered are all executed on the backend:
-  //  - processing : COD stock is deducted atomically; GCash must be paid + fulfilled
-  //  - to_receive : only from processing
-  //  - delivered  : financial settlement (idempotent)
   try {
     const encodedId = encodeURIComponent(orderId);
 
