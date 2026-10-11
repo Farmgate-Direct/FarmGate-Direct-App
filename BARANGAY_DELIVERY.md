@@ -79,15 +79,16 @@ default). Error codes: `INVALID_PROVINCE`, `UNKNOWN_CITY`, `UNKNOWN_BARANGAY`,
 ## Barangay coordinates: missing / suspicious
 
 `node data/build_barangay_data.js --check-only` →
-**569 rows, 12 with trusted coords, 557 missing, 0 suspicious, 0 duplicate keys.**
+**569 rows, 13 with trusted coords, 556 missing, 0 suspicious, 0 duplicate keys.**
 
 - **With coords (serviceable):** `Baliwag|Poblacion`, `Calumpit|Poblacion`,
-  `Guiguinto|Poblacion`, `Hagonoy|San Agustin`, `Hagonoy|Santo Niño (Pob.)`,
+  `Guiguinto|Poblacion`, `Hagonoy|Iba` (OSM place node, field-verify before
+  production reliance), `Hagonoy|San Agustin`, `Hagonoy|Santo Niño (Pob.)`,
   `Malolos|Anilao` (OSM place node, field-verify before production reliance),
   `Malolos|Bulihan`, `Malolos|San Vicente (Pob.)`, `Malolos|Santo Niño (Pob.)`,
   `Meycauayan|Poblacion`, `Meycauayan|Ubihan` (OSM boundary, field-verify before
   production reliance), `San Jose del Monte|Poblacion`.
-- **Missing (557 — delivery BLOCKED until field-verified, never guessed):** all of
+- **Missing (556 — delivery BLOCKED until field-verified, never guessed):** all of
   Angat (16), Balagtas (9), Bocaue (19), Bulakan (14), Bustos (14), Marilao (16),
   Norzagaray (13), Obando (11), Pandi (22), Paombong (14), Plaridel (19), Pulilan
   (19), San Ildefonso (36), San Miguel (49), San Rafael (34), Santa Maria (24),
