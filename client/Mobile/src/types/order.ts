@@ -67,6 +67,8 @@ export type OrderType = {
   pickupTime?: string | null;
   subTotal: number;
   deliveryFee: number;
+  distanceKm?: number | null;
+  deliveryTier?: string | null;
   total: number;
   status: OrderStatus;
 
